@@ -17,6 +17,7 @@ from urllib.parse import quote, unquote, urlparse
 
 GRAPH_ROOT = "https://graph.microsoft.com/v1.0"
 DEFAULT_SCOPES = ["Notes.Read.All"]
+SITE_URL_SCOPES = ["Notes.Read.All", "Sites.Read.All"]
 PANDOC_TARGETS = {
     "md": "gfm",
     "txt": "plain",
@@ -125,7 +126,7 @@ def parse_formats(value: str) -> list[str]:
     return formats
 
 
-def sharepoint_url_to_site_location(url: str) -> str:
+def sharepoint_url_to_site_lookup_path(url: str) -> str:
     parsed = urlparse(url.strip())
     host = parsed.netloc.lower()
     path_parts = [unquote(part) for part in parsed.path.split("/") if part]
@@ -139,6 +140,16 @@ def sharepoint_url_to_site_location(url: str) -> str:
     site_kind = path_parts[0]
     site_name = path_parts[1]
     return f"/sites/{host}:/{site_kind}/{quote(site_name, safe='')}:"
+
+
+def resolve_sharepoint_site_location(client: Any, site_url: str) -> str:
+    lookup_path = sharepoint_url_to_site_lookup_path(site_url)
+    site = client.json(lookup_path, params={"$select": "id,displayName,webUrl"})
+    site_id = site.get("id")
+    if not site_id:
+        raise GraphError(f"Could not resolve SharePoint site ID for: {site_url}")
+    log_info(f"Resolved SharePoint site: {site.get('displayName') or site.get('webUrl') or site_id}")
+    return f"/sites/{site_id}"
 
 
 def unquote_env_value(value: str) -> str:
@@ -559,18 +570,19 @@ def main(
 
     try:
         formats = parse_formats(args.formats)
-        location = (
-            sharepoint_url_to_site_location(args.site_url)
-            if args.site_url
-            else normalize_location(args.location)
-        )
+        scopes = SITE_URL_SCOPES if args.site_url else DEFAULT_SCOPES
         token = token_provider(
             client_id=args.client_id,
             tenant_id=args.tenant_id,
-            scopes=DEFAULT_SCOPES,
+            scopes=scopes,
             cache_path=Path(args.cache),
         )
         client = client_factory(token)
+        location = (
+            resolve_sharepoint_site_location(client, args.site_url)
+            if args.site_url
+            else normalize_location(args.location)
+        )
 
         if args.list:
             print_notebooks(client, location)

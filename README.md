@@ -60,6 +60,8 @@ You said the web/auth side is already done. For reference, this script expects:
 - A Microsoft Entra app registration.
 - Public client/device-code flow enabled.
 - Microsoft Graph delegated permission: `Notes.Read.All`.
+- If you use `--site-url` for Teams/Class Notebook SharePoint sites, also add
+  delegated permission: `Sites.Read.All`.
 - The Application/client ID from the app registration.
 
 You do not need a client secret for this script.
@@ -181,6 +183,10 @@ is available. Copy the browser URL. The script only needs the SharePoint site
 part of the URL, such as `/teams/...` or `/sites/...`; extra path pieces are
 ignored.
 
+`--site-url` first resolves the SharePoint URL to a Graph site ID, then calls the
+OneNote notebooks endpoint for that resolved site. That site-resolution step
+requires Microsoft Graph delegated `Sites.Read.All` in addition to `Notes.Read.All`.
+
 You can also put stable defaults in `.env` instead of typing flags every time:
 
 ```text
@@ -235,7 +241,8 @@ instead of `/me`. Use `--site-url` with a Teams/SharePoint URL for that class.
 
 If Microsoft says admin approval is required, your org blocks user consent for
 the requested Graph permission. Ask IT to approve delegated `Notes.Read.All` for
-your app registration.
+your app registration. If you use `--site-url`, also ask for delegated
+`Sites.Read.All`.
 
 If Microsoft returns `AADSTS50059` or says no tenant-identifying information was
 found, check `.env`:

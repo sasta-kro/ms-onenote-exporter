@@ -55,25 +55,45 @@ class PaginationTests(unittest.TestCase):
 
 
 class SharePointUrlTests(unittest.TestCase):
-    def test_sharepoint_url_to_site_location_supports_sites_paths(self) -> None:
+    def test_sharepoint_url_to_site_lookup_path_supports_sites_paths(self) -> None:
         url = "https://school.sharepoint.com/sites/GDD542/Class%20Notebook/Forms/AllItems.aspx"
 
-        result = export_onenote.sharepoint_url_to_site_location(url)
+        result = export_onenote.sharepoint_url_to_site_lookup_path(url)
 
         self.assertEqual(result, "/sites/school.sharepoint.com:/sites/GDD542:")
 
-    def test_sharepoint_url_to_site_location_supports_teams_paths(self) -> None:
+    def test_sharepoint_url_to_site_lookup_path_supports_teams_paths(self) -> None:
         url = "https://school.sharepoint.com/teams/2026-GDD-542/Shared%20Documents"
 
-        result = export_onenote.sharepoint_url_to_site_location(url)
+        result = export_onenote.sharepoint_url_to_site_lookup_path(url)
 
         self.assertEqual(result, "/sites/school.sharepoint.com:/teams/2026-GDD-542:")
 
-    def test_sharepoint_url_to_site_location_rejects_non_site_urls(self) -> None:
+    def test_sharepoint_url_to_site_lookup_path_rejects_non_site_urls(self) -> None:
         with self.assertRaises(ValueError):
-            export_onenote.sharepoint_url_to_site_location(
+            export_onenote.sharepoint_url_to_site_lookup_path(
                 "https://school.sharepoint.com/_layouts/15/start.aspx"
             )
+
+    def test_resolve_sharepoint_site_location_uses_graph_site_id(self) -> None:
+        client = Mock()
+        client.json.return_value = {
+            "id": "school.sharepoint.com,site-guid,web-guid",
+            "displayName": "GDD 542",
+            "webUrl": "https://school.sharepoint.com/sites/GDD542",
+        }
+
+        with patch("builtins.print"):
+            result = export_onenote.resolve_sharepoint_site_location(
+                client,
+                "https://school.sharepoint.com/sites/GDD542/Class%20Notebook",
+            )
+
+        self.assertEqual(result, "/sites/school.sharepoint.com,site-guid,web-guid")
+        client.json.assert_called_once_with(
+            "/sites/school.sharepoint.com:/sites/GDD542:",
+            params={"$select": "id,displayName,webUrl"},
+        )
 
 
 class SectionTraversalTests(unittest.TestCase):
@@ -356,6 +376,7 @@ class CliTests(unittest.TestCase):
     def test_main_uses_site_url_as_location(self) -> None:
         token_provider = Mock(return_value="token")
         client = Mock()
+        client.json.return_value = {"id": "school.sharepoint.com,site-guid,web-guid"}
         client.list_notebooks.return_value = []
 
         with (
@@ -376,8 +397,18 @@ class CliTests(unittest.TestCase):
             )
 
         self.assertEqual(exit_code, 0)
+        token_provider.assert_called_once_with(
+            client_id="abc",
+            tenant_id="organizations",
+            scopes=["Notes.Read.All", "Sites.Read.All"],
+            cache_path=Path(".msal_token_cache.json"),
+        )
+        client.json.assert_called_once_with(
+            "/sites/school.sharepoint.com:/teams/2026-GDD-542:",
+            params={"$select": "id,displayName,webUrl"},
+        )
         client.list_notebooks.assert_called_once_with(
-            "/sites/school.sharepoint.com:/teams/2026-GDD-542:"
+            "/sites/school.sharepoint.com,site-guid,web-guid"
         )
 
     def test_main_rejects_invalid_site_url_cleanly(self) -> None:
