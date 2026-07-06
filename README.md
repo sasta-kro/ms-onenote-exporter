@@ -217,6 +217,16 @@ If Microsoft says admin approval is required, your org blocks user consent for
 the requested Graph permission. Ask IT to approve delegated `Notes.Read.All` for
 your app registration.
 
+If Microsoft returns `AADSTS50059` or says no tenant-identifying information was
+found, check `.env`:
+
+```text
+ONENOTE_TENANT_ID=organizations
+```
+
+You can also use the Directory/tenant ID from the app registration Overview page.
+Do not leave `ONENOTE_TENANT_ID` blank in PyCharm's run configuration.
+
 If `.html` files export but `.md`/`.txt`/`.rtf` files do not appear, install
 Pandoc or run with `--formats ""` for HTML-only export.
 

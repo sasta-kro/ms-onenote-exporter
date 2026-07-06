@@ -46,6 +46,13 @@ def log_recommendation(message: str) -> None:
     print(f"[RECOMMENDATION] {message}")
 
 
+def env_value(name: str, default: str | None = None) -> str | None:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return default
+    return value.strip()
+
+
 def local_venv_python() -> Path:
     return Path(__file__).resolve().parent / ".venv" / "bin" / "python"
 
@@ -60,6 +67,18 @@ def log_missing_dependency(error: MissingDependencyError) -> None:
         "Then rerun main.py. Your dependencies are installed in the project .venv, "
         "not Miniforge base."
     )
+
+
+def log_runtime_error(error: RuntimeError) -> None:
+    message = str(error)
+    if "AADSTS50059" in message:
+        log_error("Microsoft login did not receive tenant-identifying information.")
+        log_recommendation(
+            "Set ONENOTE_TENANT_ID=organizations in .env, or use your Directory (tenant) ID."
+        )
+        log_info("Original error: AADSTS50059")
+        return
+    print(message, file=sys.stderr)
 
 
 def safe_name(value: str | None, fallback: str = "untitled", limit: int = 140) -> str:
@@ -112,36 +131,36 @@ def parse_args(argv: list[str] | None = None, env_file: Path | None = Path(".env
     parser = argparse.ArgumentParser(
         description="Export OneNote pages visible to your Microsoft account as local HTML files."
     )
-    parser.add_argument("--client-id", default=os.getenv("ONENOTE_CLIENT_ID"))
+    parser.add_argument("--client-id", default=env_value("ONENOTE_CLIENT_ID"))
     parser.add_argument(
         "--tenant-id",
-        default=os.getenv("ONENOTE_TENANT_ID", "organizations"),
+        default=env_value("ONENOTE_TENANT_ID", "organizations"),
         help="Microsoft tenant ID, domain, or 'organizations'.",
     )
     parser.add_argument(
         "--location",
-        default=os.getenv("ONENOTE_LOCATION", "/me"),
+        default=env_value("ONENOTE_LOCATION", "/me"),
         help="Graph location root: /me, /users/{id}, /groups/{id}, or /sites/{id}.",
     )
     parser.add_argument(
         "--out",
-        default=os.getenv("ONENOTE_OUT", "onenote_export"),
+        default=env_value("ONENOTE_OUT", "onenote_export"),
         help="Output directory.",
     )
     parser.add_argument(
         "--notebook",
-        default=os.getenv("ONENOTE_NOTEBOOK"),
+        default=env_value("ONENOTE_NOTEBOOK"),
         help="Only export notebooks whose name contains this text.",
     )
     parser.add_argument(
         "--formats",
-        default=os.getenv("ONENOTE_FORMATS", ""),
+        default=env_value("ONENOTE_FORMATS", ""),
         help="Optional comma-separated conversions: md,txt,rtf. Empty means HTML only.",
     )
     parser.add_argument("--list", action="store_true", help="List notebooks and exit.")
     parser.add_argument(
         "--cache",
-        default=os.getenv("ONENOTE_TOKEN_CACHE", ".msal_token_cache.json"),
+        default=env_value("ONENOTE_TOKEN_CACHE", ".msal_token_cache.json"),
         help="MSAL token cache path. Keep this private.",
     )
     parser.add_argument(
@@ -504,8 +523,11 @@ def main(
     except MissingDependencyError as exc:
         log_missing_dependency(exc)
         return 1
-    except (GraphError, RuntimeError, argparse.ArgumentTypeError) as exc:
+    except (GraphError, argparse.ArgumentTypeError) as exc:
         print(str(exc), file=sys.stderr)
+        return 1
+    except RuntimeError as exc:
+        log_runtime_error(exc)
         return 1
 
 

@@ -148,6 +148,26 @@ class CliTests(unittest.TestCase):
         self.assertEqual(args.formats, "")
         self.assertEqual(args.location, "/me")
 
+    def test_parse_args_treats_blank_env_values_as_missing(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "ONENOTE_CLIENT_ID": "",
+                "ONENOTE_TENANT_ID": "",
+                "ONENOTE_LOCATION": "",
+                "ONENOTE_OUT": "",
+                "ONENOTE_FORMATS": "",
+            },
+            clear=True,
+        ):
+            args = export_onenote.parse_args([], env_file=None)
+
+        self.assertIsNone(args.client_id)
+        self.assertEqual(args.tenant_id, "organizations")
+        self.assertEqual(args.location, "/me")
+        self.assertEqual(args.out, "onenote_export")
+        self.assertEqual(args.formats, "")
+
     def test_main_prints_tagged_error_when_client_id_is_missing(self) -> None:
         with (
             patch.dict(os.environ, {}, clear=True),
@@ -187,6 +207,30 @@ class CliTests(unittest.TestCase):
                 "[INFO] Project venv Python: /project/.venv/bin/python",
                 "[RECOMMENDATION] In PyCharm, set the Project Interpreter to: /project/.venv/bin/python",
                 "[RECOMMENDATION] Then rerun main.py. Your dependencies are installed in the project .venv, not Miniforge base.",
+            ],
+        )
+
+    def test_main_explains_tenant_missing_auth_error(self) -> None:
+        auth_error = RuntimeError(
+            "Could not start Microsoft device login: "
+            "{'error': 'invalid_request', 'error_description': 'AADSTS50059: "
+            "No tenant-identifying information found'}"
+        )
+        token_provider = Mock(side_effect=auth_error)
+
+        with patch("builtins.print") as print_mock:
+            exit_code = export_onenote.main(
+                ["--client-id", "abc"],
+                token_provider=token_provider,
+            )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(
+            [call.args[0] for call in print_mock.call_args_list],
+            [
+                "[ERROR] Microsoft login did not receive tenant-identifying information.",
+                "[RECOMMENDATION] Set ONENOTE_TENANT_ID=organizations in .env, or use your Directory (tenant) ID.",
+                "[INFO] Original error: AADSTS50059",
             ],
         )
 
