@@ -1,0 +1,16 @@
+.venv/
+.idea/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.py[cod]
+
+# Local auth/cache/output
+.msal_token_cache.json
+onenote_export/
+OneNoteExport/
+
+# Local environment files
+.env
+.env.*
