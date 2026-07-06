@@ -13,7 +13,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlparse
 
 GRAPH_ROOT = "https://graph.microsoft.com/v1.0"
 DEFAULT_SCOPES = ["Notes.Read.All"]
@@ -125,6 +125,22 @@ def parse_formats(value: str) -> list[str]:
     return formats
 
 
+def sharepoint_url_to_site_location(url: str) -> str:
+    parsed = urlparse(url.strip())
+    host = parsed.netloc.lower()
+    path_parts = [unquote(part) for part in parsed.path.split("/") if part]
+
+    if not host or len(path_parts) < 2 or path_parts[0].lower() not in {"sites", "teams"}:
+        raise ValueError(
+            "Could not infer a SharePoint site from that URL. Expected a URL containing "
+            "/sites/<name>/... or /teams/<name>/..."
+        )
+
+    site_kind = path_parts[0]
+    site_name = path_parts[1]
+    return f"/sites/{host}:/{site_kind}/{quote(site_name, safe='')}:"
+
+
 def unquote_env_value(value: str) -> str:
     value = value.strip()
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
@@ -166,6 +182,11 @@ def parse_args(argv: list[str] | None = None, env_file: Path | None = Path(".env
         "--location",
         default=env_value("ONENOTE_LOCATION", "/me"),
         help="Graph location root: /me, /users/{id}, /groups/{id}, or /sites/{id}.",
+    )
+    parser.add_argument(
+        "--site-url",
+        default=env_value("ONENOTE_SITE_URL"),
+        help="Teams/SharePoint URL for a class notebook site. Overrides --location.",
     )
     parser.add_argument(
         "--out",
@@ -538,7 +559,11 @@ def main(
 
     try:
         formats = parse_formats(args.formats)
-        location = normalize_location(args.location)
+        location = (
+            sharepoint_url_to_site_location(args.site_url)
+            if args.site_url
+            else normalize_location(args.location)
+        )
         token = token_provider(
             client_id=args.client_id,
             tenant_id=args.tenant_id,
@@ -563,7 +588,7 @@ def main(
     except MissingDependencyError as exc:
         log_missing_dependency(exc)
         return 1
-    except (GraphError, argparse.ArgumentTypeError) as exc:
+    except (GraphError, ValueError, argparse.ArgumentTypeError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
     except RuntimeError as exc:

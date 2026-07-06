@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import io
 import os
 import tempfile
 import unittest
@@ -51,6 +52,28 @@ class PaginationTests(unittest.TestCase):
                 ("https://example.test/next", None),
             ],
         )
+
+
+class SharePointUrlTests(unittest.TestCase):
+    def test_sharepoint_url_to_site_location_supports_sites_paths(self) -> None:
+        url = "https://school.sharepoint.com/sites/GDD542/Class%20Notebook/Forms/AllItems.aspx"
+
+        result = export_onenote.sharepoint_url_to_site_location(url)
+
+        self.assertEqual(result, "/sites/school.sharepoint.com:/sites/GDD542:")
+
+    def test_sharepoint_url_to_site_location_supports_teams_paths(self) -> None:
+        url = "https://school.sharepoint.com/teams/2026-GDD-542/Shared%20Documents"
+
+        result = export_onenote.sharepoint_url_to_site_location(url)
+
+        self.assertEqual(result, "/sites/school.sharepoint.com:/teams/2026-GDD-542:")
+
+    def test_sharepoint_url_to_site_location_rejects_non_site_urls(self) -> None:
+        with self.assertRaises(ValueError):
+            export_onenote.sharepoint_url_to_site_location(
+                "https://school.sharepoint.com/_layouts/15/start.aspx"
+            )
 
 
 class SectionTraversalTests(unittest.TestCase):
@@ -179,6 +202,19 @@ class CliTests(unittest.TestCase):
         self.assertEqual(args.tenant_id, "organizations")
         self.assertEqual(args.formats, "")
         self.assertEqual(args.location, "/me")
+
+    def test_parse_args_accepts_site_url(self) -> None:
+        args = export_onenote.parse_args(
+            [
+                "--client-id",
+                "abc",
+                "--site-url",
+                "https://school.sharepoint.com/sites/GDD542/Shared%20Documents",
+            ],
+            env_file=None,
+        )
+
+        self.assertEqual(args.site_url, "https://school.sharepoint.com/sites/GDD542/Shared%20Documents")
 
     def test_parse_args_treats_blank_env_values_as_missing(self) -> None:
         with patch.dict(
@@ -315,6 +351,52 @@ class CliTests(unittest.TestCase):
         client.list_notebooks.assert_called_once_with("/me")
         self.assertTrue(
             any("Course Notes" in str(call.args[0]) for call in print_mock.call_args_list)
+        )
+
+    def test_main_uses_site_url_as_location(self) -> None:
+        token_provider = Mock(return_value="token")
+        client = Mock()
+        client.list_notebooks.return_value = []
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(export_onenote, "load_dotenv", return_value=False),
+            patch("builtins.print"),
+        ):
+            exit_code = export_onenote.main(
+                [
+                    "--client-id",
+                    "abc",
+                    "--site-url",
+                    "https://school.sharepoint.com/teams/2026-GDD-542/Shared%20Documents",
+                    "--list",
+                ],
+                token_provider=token_provider,
+                client_factory=lambda token: client,
+            )
+
+        self.assertEqual(exit_code, 0)
+        client.list_notebooks.assert_called_once_with(
+            "/sites/school.sharepoint.com:/teams/2026-GDD-542:"
+        )
+
+    def test_main_rejects_invalid_site_url_cleanly(self) -> None:
+        stderr = io.StringIO()
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(export_onenote, "load_dotenv", return_value=False),
+            patch("sys.stderr", stderr),
+        ):
+            exit_code = export_onenote.main(
+                ["--client-id", "abc", "--site-url", "https://school.sharepoint.com/_layouts/15/start.aspx"],
+                token_provider=Mock(return_value="token"),
+            )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(
+            stderr.getvalue(),
+            "Could not infer a SharePoint site from that URL. Expected a URL containing "
+            "/sites/<name>/... or /teams/<name>/...\n"
         )
 
     def test_parse_args_rejects_unknown_formats(self) -> None:

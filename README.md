@@ -168,12 +168,26 @@ python main.py --location "/groups/GROUP_ID" --out ~/OneNoteExport
 python main.py --location "/sites/SITE_ID" --out ~/OneNoteExport
 ```
 
+For a Teams Class Notebook, `/me` may show zero notebooks even though you can see
+the notebook in Teams. Use a Teams/SharePoint site URL instead:
+
+```bash
+python main.py --site-url "https://yourtenant.sharepoint.com/teams/TEAM-SITE-NAME/Shared%20Documents" --list
+python main.py --site-url "https://yourtenant.sharepoint.com/teams/TEAM-SITE-NAME/Shared%20Documents" --notebook "2026-1 GDD 542 Notebook"
+```
+
+In Teams, open the class notebook and use the globe/open-in-browser button if it
+is available. Copy the browser URL. The script only needs the SharePoint site
+part of the URL, such as `/teams/...` or `/sites/...`; extra path pieces are
+ignored.
+
 You can also put stable defaults in `.env` instead of typing flags every time:
 
 ```text
 ONENOTE_OUT=~/OneNoteExport
 ONENOTE_NOTEBOOK=CSX4107
 ONENOTE_FORMATS=md,txt
+ONENOTE_SITE_URL=https://yourtenant.sharepoint.com/teams/TEAM-SITE-NAME/Shared%20Documents
 ```
 
 ## Output
@@ -217,7 +231,7 @@ confirm the notebook is visible to the same account in OneNote.
 If `--notebook "Some Name"` says no notebooks matched, the script will print the
 notebooks it can see. Copy one of those names exactly. If your class notebook is
 not in that list, it may be stored under a Microsoft 365 group or SharePoint site
-instead of `/me`.
+instead of `/me`. Use `--site-url` with a Teams/SharePoint URL for that class.
 
 If Microsoft says admin approval is required, your org blocks user consent for
 the requested Graph permission. Ask IT to approve delegated `Notes.Read.All` for
