@@ -91,6 +91,38 @@ class SectionTraversalTests(unittest.TestCase):
         )
 
 
+class ExportNotebookTests(unittest.TestCase):
+    def test_export_notebooks_shows_available_names_when_filter_matches_nothing(self) -> None:
+        client = Mock()
+        client.list_notebooks.return_value = [
+            {"displayName": "2026-1 GDD542 Notebook"},
+            {"displayName": "Personal Notes"},
+        ]
+
+        with patch("builtins.print") as print_mock:
+            count = export_onenote.export_notebooks(
+                client,
+                location="/me",
+                output_dir=Path("out"),
+                notebook_filter="2026-1 GDD 542 Notebook",
+                formats=[],
+                include_ids=False,
+            )
+
+        self.assertEqual(count, 0)
+        self.assertEqual(
+            [call.args[0] for call in print_mock.call_args_list],
+            [
+                "[ERROR] No notebooks matched filter: 2026-1 GDD 542 Notebook",
+                "[INFO] Notebooks visible at /me:",
+                "  - 2026-1 GDD542 Notebook",
+                "  - Personal Notes",
+                "[RECOMMENDATION] Copy one of the names above exactly, or run with --list.",
+                "[RECOMMENDATION] If your class notebook is not listed, it may live under a Microsoft 365 group or SharePoint site.",
+            ],
+        )
+
+
 class CliTests(unittest.TestCase):
     def test_load_dotenv_reads_simple_project_env_without_overriding_existing_values(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

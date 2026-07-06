@@ -214,6 +214,11 @@ rm .msal_token_cache.json
 If `--list` says no notebooks were found, first try without `--notebook` and
 confirm the notebook is visible to the same account in OneNote.
 
+If `--notebook "Some Name"` says no notebooks matched, the script will print the
+notebooks it can see. Copy one of those names exactly. If your class notebook is
+not in that list, it may be stored under a Microsoft 365 group or SharePoint site
+instead of `/me`.
+
 If Microsoft says admin approval is required, your org blocks user consent for
 the requested Graph permission. Ask IT to approve delegated `Notes.Read.All` for
 your app registration.

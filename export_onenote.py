@@ -444,7 +444,8 @@ def export_notebooks(
     formats: list[str],
     include_ids: bool,
 ) -> int:
-    notebooks = client.list_notebooks(location)
+    all_notebooks = client.list_notebooks(location)
+    notebooks = all_notebooks
     if notebook_filter:
         notebooks = [
             notebook
@@ -453,9 +454,23 @@ def export_notebooks(
         ]
 
     if not notebooks:
-        print("No notebooks found.")
-        if notebook_filter:
-            print("Try running with --list or without --notebook to see available names.")
+        if notebook_filter and all_notebooks:
+            log_error(f"No notebooks matched filter: {notebook_filter}")
+            log_info(f"Notebooks visible at {normalize_location(location)}:")
+            for notebook in all_notebooks[:20]:
+                print(f"  - {notebook.get('displayName') or 'Untitled notebook'}")
+            if len(all_notebooks) > 20:
+                print(f"  ... and {len(all_notebooks) - 20} more")
+            log_recommendation("Copy one of the names above exactly, or run with --list.")
+            log_recommendation(
+                "If your class notebook is not listed, it may live under a Microsoft 365 group "
+                "or SharePoint site."
+            )
+        else:
+            log_error(f"No notebooks found at {normalize_location(location)}.")
+            log_recommendation(
+                "Try --location /groups/GROUP_ID or --location /sites/SITE_ID if this is a class notebook."
+            )
         return 0
 
     output_dir.mkdir(parents=True, exist_ok=True)
