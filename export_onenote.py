@@ -28,6 +28,14 @@ class GraphError(RuntimeError):
     """Raised when Microsoft Graph returns an unrecoverable error."""
 
 
+def log_error(message: str) -> None:
+    print(f"[ERROR] {message}")
+
+
+def log_recommendation(message: str) -> None:
+    print(f"[RECOMMENDATION] {message}")
+
+
 def safe_name(value: str | None, fallback: str = "untitled", limit: int = 140) -> str:
     value = value or fallback
     value = re.sub(r"[\\/:*?\"<>|#%{}$!@+`=]", "_", value)
@@ -445,8 +453,8 @@ def main(
 ) -> int:
     args = parse_args(argv)
     if not args.client_id:
-        print("Missing Microsoft Entra application/client ID.")
-        print("Set ONENOTE_CLIENT_ID or pass --client-id.")
+        log_error("Missing Microsoft Entra application/client ID.")
+        log_recommendation("Set ONENOTE_CLIENT_ID or pass --client-id.")
         return 2
 
     try:

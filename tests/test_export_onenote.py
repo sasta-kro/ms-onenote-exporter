@@ -148,6 +148,19 @@ class CliTests(unittest.TestCase):
         self.assertEqual(args.formats, "")
         self.assertEqual(args.location, "/me")
 
+    def test_main_prints_tagged_error_when_client_id_is_missing(self) -> None:
+        with patch.dict(os.environ, {}, clear=True), patch("builtins.print") as print_mock:
+            exit_code = export_onenote.main([], token_provider=Mock())
+
+        self.assertEqual(exit_code, 2)
+        self.assertEqual(
+            [call.args[0] for call in print_mock.call_args_list],
+            [
+                "[ERROR] Missing Microsoft Entra application/client ID.",
+                "[RECOMMENDATION] Set ONENOTE_CLIENT_ID or pass --client-id.",
+            ],
+        )
+
     def test_main_lists_notebooks_without_exporting_pages(self) -> None:
         token_provider = Mock(return_value="token")
         client = Mock()
