@@ -188,11 +188,17 @@ By default, `--site-url` does not contact Microsoft Graph. It prints two
 SharePoint `_api` URLs that you open in your normal signed-in browser:
 
 ```text
-[INFO] SharePoint site detected: https://yourtenant.sharepoint.com/teams/TEAM-SITE-NAME
-[ACTION] Open this URL while signed into your school account:
+== SharePoint site ==
+https://yourtenant.sharepoint.com/teams/TEAM-SITE-NAME
+
+== Step 1: open this in your signed-in browser ==
 https://yourtenant.sharepoint.com/teams/TEAM-SITE-NAME/_api/site/id
-[ACTION] Open this URL too:
+
+== Step 2: open this in your signed-in browser ==
 https://yourtenant.sharepoint.com/teams/TEAM-SITE-NAME/_api/web/id
+
+== Step 3: copy the two GUID values, then run ==
+python main.py --site-id "yourtenant.sharepoint.com,SITE_GUID,WEB_GUID" --list
 ```
 
 Each page shows one GUID. Copy the GUID text from each page:

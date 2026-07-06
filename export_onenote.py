@@ -157,23 +157,39 @@ def sharepoint_url_to_site_id_helper_urls(url: str) -> SharePointSiteIdHelperUrl
     )
 
 
+def shell_double_quote(value: str) -> str:
+    escaped = (
+        value.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("$", "\\$")
+        .replace("`", "\\`")
+        .replace("\n", " ")
+    )
+    return f'"{escaped}"'
+
+
 def print_site_id_helper(site_url: str, *, list_notebooks: bool = False, notebook: str | None = None) -> None:
     helper = sharepoint_url_to_site_id_helper_urls(site_url)
     if notebook:
-        next_flag = f'--notebook "{notebook}"'
+        next_flag = f"--notebook {shell_double_quote(notebook)}"
     elif list_notebooks:
         next_flag = "--list"
     else:
         next_flag = "--list"
 
-    log_info(f"SharePoint site detected: {helper.site_root}")
-    log_action("Open this URL while signed into your school account:")
+    print("")
+    print("== SharePoint site ==")
+    print(helper.site_root)
+    print("")
+    print("== Step 1: open this in your signed-in browser ==")
     print(helper.site_id_url)
-    log_action("Open this URL too:")
+    print("")
+    print("== Step 2: open this in your signed-in browser ==")
     print(helper.web_id_url)
-    print("[NEXT] Copy the GUID from each page, then run:")
-    print(f'python main.py --site-id "{helper.site_id_template}" {next_flag}')
-    log_info("This helper does not need Microsoft Graph Sites.Read.All admin approval.")
+    print("")
+    print("== Step 3: copy the two GUID values, then run ==")
+    print(f"python main.py --site-id {shell_double_quote(helper.site_id_template)} {next_flag}")
+    print("")
 
 
 def sharepoint_url_to_site_lookup_path(url: str) -> str:
@@ -622,7 +638,7 @@ def export_notebooks(
     return total_pages
 
 
-def print_notebooks(client: GraphClient, location: str) -> None:
+def print_notebooks(client: GraphClient, location: str, export_command_base: str | None = None) -> None:
     notebooks = client.list_notebooks(location)
     if not notebooks:
         print("No notebooks found.")
@@ -632,6 +648,11 @@ def print_notebooks(client: GraphClient, location: str) -> None:
         shared = notebook.get("isShared")
         role = notebook.get("userRole")
         print(f"{index}. {name} | shared={shared} | role={role}")
+    if export_command_base:
+        first_name = notebooks[0].get("displayName") or "Untitled notebook"
+        print("")
+        print("== To download one notebook ==")
+        print(f"{export_command_base} --notebook {shell_double_quote(first_name)}")
 
 
 def main(
@@ -670,13 +691,23 @@ def main(
         client = client_factory(token)
         if args.site_id:
             location = site_id_to_site_location(args.site_id)
+            site_id_value = location[len("/sites/") :]
+            export_command_base = f"python main.py --site-id {shell_double_quote(site_id_value)}"
         elif args.site_url:
             location = resolve_sharepoint_site_location(client, args.site_url)
+            export_command_base = (
+                f"python main.py --site-url {shell_double_quote(args.site_url)} "
+                "--resolve-site-url-with-graph"
+            )
         else:
             location = normalize_location(args.location)
+            if location == "/me":
+                export_command_base = "python main.py"
+            else:
+                export_command_base = f"python main.py --location {shell_double_quote(location)}"
 
         if args.list:
-            print_notebooks(client, location)
+            print_notebooks(client, location, export_command_base=export_command_base)
             return 0
 
         export_notebooks(

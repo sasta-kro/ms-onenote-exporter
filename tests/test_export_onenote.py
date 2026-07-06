@@ -458,14 +458,19 @@ class CliTests(unittest.TestCase):
         self.assertEqual(
             [call.args[0] for call in print_mock.call_args_list],
             [
-                "[INFO] SharePoint site detected: https://school.sharepoint.com/teams/2026-GDD-542",
-                "[ACTION] Open this URL while signed into your school account:",
+                "",
+                "== SharePoint site ==",
+                "https://school.sharepoint.com/teams/2026-GDD-542",
+                "",
+                "== Step 1: open this in your signed-in browser ==",
                 "https://school.sharepoint.com/teams/2026-GDD-542/_api/site/id",
-                "[ACTION] Open this URL too:",
+                "",
+                "== Step 2: open this in your signed-in browser ==",
                 "https://school.sharepoint.com/teams/2026-GDD-542/_api/web/id",
-                "[NEXT] Copy the GUID from each page, then run:",
+                "",
+                "== Step 3: copy the two GUID values, then run ==",
                 'python main.py --site-id "school.sharepoint.com,SITE_GUID,WEB_GUID" --list',
-                "[INFO] This helper does not need Microsoft Graph Sites.Read.All admin approval.",
+                "",
             ],
         )
 
@@ -511,12 +516,14 @@ class CliTests(unittest.TestCase):
     def test_main_uses_site_id_without_sites_read_scope(self) -> None:
         token_provider = Mock(return_value="token")
         client = Mock()
-        client.list_notebooks.return_value = []
+        client.list_notebooks.return_value = [
+            {"displayName": "2026-1 CSX4107(541) Notebook", "isShared": False, "userRole": "Owner"}
+        ]
 
         with (
             patch.dict(os.environ, {}, clear=True),
             patch.object(export_onenote, "load_dotenv", return_value=False),
-            patch("builtins.print"),
+            patch("builtins.print") as print_mock,
         ):
             exit_code = export_onenote.main(
                 [
@@ -540,6 +547,15 @@ class CliTests(unittest.TestCase):
         client.json.assert_not_called()
         client.list_notebooks.assert_called_once_with(
             "/sites/school.sharepoint.com,site-guid,web-guid"
+        )
+        self.assertEqual(
+            [call.args[0] for call in print_mock.call_args_list],
+            [
+                "1. 2026-1 CSX4107(541) Notebook | shared=False | role=Owner",
+                "",
+                "== To download one notebook ==",
+                'python main.py --site-id "school.sharepoint.com,site-guid,web-guid" --notebook "2026-1 CSX4107(541) Notebook"',
+            ],
         )
 
     def test_main_rejects_invalid_site_url_cleanly(self) -> None:
