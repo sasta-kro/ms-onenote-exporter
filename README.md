@@ -60,8 +60,9 @@ You said the web/auth side is already done. For reference, this script expects:
 - A Microsoft Entra app registration.
 - Public client/device-code flow enabled.
 - Microsoft Graph delegated permission: `Notes.Read.All`.
-- If you use `--site-url` for Teams/Class Notebook SharePoint sites, also add
-  delegated permission: `Sites.Read.All`.
+- Optional advanced mode only: `--resolve-site-url-with-graph` also needs
+  delegated permission `Sites.Read.All`, which many school/work tenants block
+  behind admin approval.
 - The Application/client ID from the app registration.
 
 You do not need a client secret for this script.
@@ -171,7 +172,7 @@ python main.py --location "/sites/SITE_ID" --out ~/OneNoteExport
 ```
 
 For a Teams Class Notebook, `/me` may show zero notebooks even though you can see
-the notebook in Teams. Use a Teams/SharePoint site URL instead:
+the notebook in Teams. Start by pasting the Teams/OneNote browser URL:
 
 ```bash
 python main.py --site-url "https://yourtenant.sharepoint.com/teams/TEAM-SITE-NAME/Shared%20Documents" --list
@@ -183,13 +184,18 @@ is available. Copy the browser URL. The script only needs the SharePoint site
 part of the URL, such as `/teams/...` or `/sites/...`; extra path pieces are
 ignored.
 
-`--site-url` first resolves the SharePoint URL to a Graph site ID, then calls the
-OneNote notebooks endpoint for that resolved site. That site-resolution step
-requires Microsoft Graph delegated `Sites.Read.All` in addition to `Notes.Read.All`.
+By default, `--site-url` does not contact Microsoft Graph. It prints two
+SharePoint `_api` URLs that you open in your normal signed-in browser:
 
-If your org blocks `Sites.Read.All` with an admin-approval screen, use
-`--site-id` instead. You can get the two required GUIDs from SharePoint in your
-normal signed-in browser:
+```text
+[INFO] SharePoint site detected: https://yourtenant.sharepoint.com/teams/TEAM-SITE-NAME
+[ACTION] Open this URL while signed into your school account:
+https://yourtenant.sharepoint.com/teams/TEAM-SITE-NAME/_api/site/id
+[ACTION] Open this URL too:
+https://yourtenant.sharepoint.com/teams/TEAM-SITE-NAME/_api/web/id
+```
+
+Each page shows one GUID. Copy the GUID text from each page:
 
 ```text
 https://yourtenant.sharepoint.com/sites/SITE_NAME/_api/site/id
@@ -204,7 +210,7 @@ Then combine them like this:
 yourtenant.sharepoint.com,siteCollectionGuid,webGuid
 ```
 
-Example:
+Then use that resolved site ID for listing and exporting:
 
 ```bash
 python main.py --site-id "yourtenant.sharepoint.com,siteCollectionGuid,webGuid" --list
@@ -214,13 +220,19 @@ python main.py --site-id "yourtenant.sharepoint.com,siteCollectionGuid,webGuid" 
 `--site-id` skips the SharePoint site-resolution API call, so the app only asks
 for `Notes.Read.All`.
 
+If your tenant does allow `Sites.Read.All`, you can use the older automatic Graph
+resolver:
+
+```bash
+python main.py --site-url "https://yourtenant.sharepoint.com/teams/TEAM-SITE-NAME/Shared%20Documents" --resolve-site-url-with-graph --list
+```
+
 You can also put stable defaults in `.env` instead of typing flags every time:
 
 ```text
 ONENOTE_OUT=~/OneNoteExport
 ONENOTE_NOTEBOOK=CSX4107
 ONENOTE_FORMATS=md,txt
-ONENOTE_SITE_URL=https://yourtenant.sharepoint.com/teams/TEAM-SITE-NAME/Shared%20Documents
 ONENOTE_SITE_ID=yourtenant.sharepoint.com,siteCollectionGuid,webGuid
 ```
 
@@ -269,8 +281,8 @@ instead of `/me`. Use `--site-url` with a Teams/SharePoint URL for that class.
 
 If Microsoft says admin approval is required, your org blocks user consent for
 the requested Graph permission. Ask IT to approve delegated `Notes.Read.All` for
-your app registration. If you use `--site-url`, also ask for delegated
-`Sites.Read.All`.
+your app registration. The default `--site-url` helper avoids `Sites.Read.All`;
+only `--resolve-site-url-with-graph` needs that permission.
 
 If Microsoft returns `AADSTS50059` or says no tenant-identifying information was
 found, check `.env`:

@@ -69,6 +69,31 @@ class SharePointUrlTests(unittest.TestCase):
 
         self.assertEqual(result, "/sites/school.sharepoint.com:/teams/2026-GDD-542:")
 
+    def test_sharepoint_url_to_site_id_helper_urls_supports_doc_links(self) -> None:
+        url = (
+            "https://school.sharepoint.com/sites/Section_123/_layouts/15/Doc.aspx"
+            "?sourcedoc={abc}&action=view"
+        )
+
+        result = export_onenote.sharepoint_url_to_site_id_helper_urls(url)
+
+        self.assertEqual(
+            result.site_root,
+            "https://school.sharepoint.com/sites/Section_123",
+        )
+        self.assertEqual(
+            result.site_id_url,
+            "https://school.sharepoint.com/sites/Section_123/_api/site/id",
+        )
+        self.assertEqual(
+            result.web_id_url,
+            "https://school.sharepoint.com/sites/Section_123/_api/web/id",
+        )
+        self.assertEqual(
+            result.site_id_template,
+            "school.sharepoint.com,SITE_GUID,WEB_GUID",
+        )
+
     def test_sharepoint_url_to_site_lookup_path_rejects_non_site_urls(self) -> None:
         with self.assertRaises(ValueError):
             export_onenote.sharepoint_url_to_site_lookup_path(
@@ -406,7 +431,45 @@ class CliTests(unittest.TestCase):
             any("Course Notes" in str(call.args[0]) for call in print_mock.call_args_list)
         )
 
-    def test_main_uses_site_url_as_location(self) -> None:
+    def test_main_prints_site_id_helper_for_site_url_by_default(self) -> None:
+        token_provider = Mock(return_value="token")
+        client = Mock()
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(export_onenote, "load_dotenv", return_value=False),
+            patch("builtins.print") as print_mock,
+        ):
+            exit_code = export_onenote.main(
+                [
+                    "--client-id",
+                    "abc",
+                    "--site-url",
+                    "https://school.sharepoint.com/teams/2026-GDD-542/Shared%20Documents",
+                    "--list",
+                ],
+                token_provider=token_provider,
+                client_factory=lambda token: client,
+            )
+
+        self.assertEqual(exit_code, 0)
+        token_provider.assert_not_called()
+        client.list_notebooks.assert_not_called()
+        self.assertEqual(
+            [call.args[0] for call in print_mock.call_args_list],
+            [
+                "[INFO] SharePoint site detected: https://school.sharepoint.com/teams/2026-GDD-542",
+                "[ACTION] Open this URL while signed into your school account:",
+                "https://school.sharepoint.com/teams/2026-GDD-542/_api/site/id",
+                "[ACTION] Open this URL too:",
+                "https://school.sharepoint.com/teams/2026-GDD-542/_api/web/id",
+                "[NEXT] Copy the GUID from each page, then run:",
+                'python main.py --site-id "school.sharepoint.com,SITE_GUID,WEB_GUID" --list',
+                "[INFO] This helper does not need Microsoft Graph Sites.Read.All admin approval.",
+            ],
+        )
+
+    def test_main_uses_site_url_as_location_when_graph_resolution_requested(self) -> None:
         token_provider = Mock(return_value="token")
         client = Mock()
         client.json.return_value = {"id": "school.sharepoint.com,site-guid,web-guid"}
@@ -423,6 +486,7 @@ class CliTests(unittest.TestCase):
                     "abc",
                     "--site-url",
                     "https://school.sharepoint.com/teams/2026-GDD-542/Shared%20Documents",
+                    "--resolve-site-url-with-graph",
                     "--list",
                 ],
                 token_provider=token_provider,

@@ -126,6 +126,56 @@ def parse_formats(value: str) -> list[str]:
     return formats
 
 
+@dataclass(frozen=True)
+class SharePointSiteIdHelperUrls:
+    site_root: str
+    site_id_url: str
+    web_id_url: str
+    site_id_template: str
+
+
+def sharepoint_url_to_site_id_helper_urls(url: str) -> SharePointSiteIdHelperUrls:
+    parsed = urlparse(url.strip())
+    scheme = parsed.scheme or "https"
+    host = parsed.netloc.lower()
+    path_parts = [unquote(part) for part in parsed.path.split("/") if part]
+
+    if not host or len(path_parts) < 2 or path_parts[0].lower() not in {"sites", "teams"}:
+        raise ValueError(
+            "Could not infer a SharePoint site from that URL. Expected a URL containing "
+            "/sites/<name>/... or /teams/<name>/..."
+        )
+
+    site_kind = path_parts[0].lower()
+    site_name = quote(path_parts[1], safe="")
+    site_root = f"{scheme}://{host}/{site_kind}/{site_name}"
+    return SharePointSiteIdHelperUrls(
+        site_root=site_root,
+        site_id_url=f"{site_root}/_api/site/id",
+        web_id_url=f"{site_root}/_api/web/id",
+        site_id_template=f"{host},SITE_GUID,WEB_GUID",
+    )
+
+
+def print_site_id_helper(site_url: str, *, list_notebooks: bool = False, notebook: str | None = None) -> None:
+    helper = sharepoint_url_to_site_id_helper_urls(site_url)
+    if notebook:
+        next_flag = f'--notebook "{notebook}"'
+    elif list_notebooks:
+        next_flag = "--list"
+    else:
+        next_flag = "--list"
+
+    log_info(f"SharePoint site detected: {helper.site_root}")
+    log_action("Open this URL while signed into your school account:")
+    print(helper.site_id_url)
+    log_action("Open this URL too:")
+    print(helper.web_id_url)
+    print("[NEXT] Copy the GUID from each page, then run:")
+    print(f'python main.py --site-id "{helper.site_id_template}" {next_flag}')
+    log_info("This helper does not need Microsoft Graph Sites.Read.All admin approval.")
+
+
 def sharepoint_url_to_site_lookup_path(url: str) -> str:
     parsed = urlparse(url.strip())
     host = parsed.netloc.lower()
@@ -221,6 +271,11 @@ def parse_args(argv: list[str] | None = None, env_file: Path | None = Path(".env
         "--site-id",
         default=env_value("ONENOTE_SITE_ID"),
         help="Resolved Graph site ID: hostname,siteCollectionGuid,webGuid. Overrides --site-url and --location.",
+    )
+    parser.add_argument(
+        "--resolve-site-url-with-graph",
+        action="store_true",
+        help="Advanced: resolve --site-url through Microsoft Graph. Requires Sites.Read.All admin consent.",
     )
     parser.add_argument(
         "--out",
@@ -586,6 +641,14 @@ def main(
     client_factory: Callable[[str], GraphClient] = GraphClient,
 ) -> int:
     args = parse_args(argv)
+    if args.site_url and not args.site_id and not args.resolve_site_url_with_graph:
+        try:
+            print_site_id_helper(args.site_url, list_notebooks=args.list, notebook=args.notebook)
+            return 0
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+
     if not args.client_id:
         log_error("Missing Microsoft Entra application/client ID.")
         log_recommendation("Set ONENOTE_CLIENT_ID or pass --client-id.")
@@ -593,7 +656,11 @@ def main(
 
     try:
         formats = parse_formats(args.formats)
-        scopes = SITE_URL_SCOPES if args.site_url and not args.site_id else DEFAULT_SCOPES
+        scopes = (
+            SITE_URL_SCOPES
+            if args.site_url and not args.site_id and args.resolve_site_url_with_graph
+            else DEFAULT_SCOPES
+        )
         token = token_provider(
             client_id=args.client_id,
             tenant_id=args.tenant_id,
