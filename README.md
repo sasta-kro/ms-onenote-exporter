@@ -187,6 +187,33 @@ ignored.
 OneNote notebooks endpoint for that resolved site. That site-resolution step
 requires Microsoft Graph delegated `Sites.Read.All` in addition to `Notes.Read.All`.
 
+If your org blocks `Sites.Read.All` with an admin-approval screen, use
+`--site-id` instead. You can get the two required GUIDs from SharePoint in your
+normal signed-in browser:
+
+```text
+https://yourtenant.sharepoint.com/sites/SITE_NAME/_api/site/id
+https://yourtenant.sharepoint.com/sites/SITE_NAME/_api/web/id
+```
+
+For a `/teams/...` site, use `/teams/SITE_NAME/_api/...` instead.
+
+Then combine them like this:
+
+```text
+yourtenant.sharepoint.com,siteCollectionGuid,webGuid
+```
+
+Example:
+
+```bash
+python main.py --site-id "yourtenant.sharepoint.com,siteCollectionGuid,webGuid" --list
+python main.py --site-id "yourtenant.sharepoint.com,siteCollectionGuid,webGuid" --notebook "2026-1 GDD 542 Notebook"
+```
+
+`--site-id` skips the SharePoint site-resolution API call, so the app only asks
+for `Notes.Read.All`.
+
 You can also put stable defaults in `.env` instead of typing flags every time:
 
 ```text
@@ -194,6 +221,7 @@ ONENOTE_OUT=~/OneNoteExport
 ONENOTE_NOTEBOOK=CSX4107
 ONENOTE_FORMATS=md,txt
 ONENOTE_SITE_URL=https://yourtenant.sharepoint.com/teams/TEAM-SITE-NAME/Shared%20Documents
+ONENOTE_SITE_ID=yourtenant.sharepoint.com,siteCollectionGuid,webGuid
 ```
 
 ## Output

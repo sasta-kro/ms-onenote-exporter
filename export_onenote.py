@@ -152,6 +152,24 @@ def resolve_sharepoint_site_location(client: Any, site_url: str) -> str:
     return f"/sites/{site_id}"
 
 
+def site_id_to_site_location(site_id: str) -> str:
+    value = site_id.strip()
+    if value.startswith("/sites/"):
+        value = value[len("/sites/") :]
+    if ":/" in value or value.endswith(":"):
+        raise ValueError(
+            "--site-id expects a resolved Graph site ID like "
+            "hostname,siteCollectionGuid,webGuid. Use --site-url for SharePoint URLs."
+        )
+    parts = [part.strip() for part in value.split(",")]
+    if len(parts) != 3 or not all(parts):
+        raise ValueError(
+            "--site-id expects a resolved Graph site ID like "
+            "hostname,siteCollectionGuid,webGuid."
+        )
+    return f"/sites/{value}"
+
+
 def unquote_env_value(value: str) -> str:
     value = value.strip()
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
@@ -198,6 +216,11 @@ def parse_args(argv: list[str] | None = None, env_file: Path | None = Path(".env
         "--site-url",
         default=env_value("ONENOTE_SITE_URL"),
         help="Teams/SharePoint URL for a class notebook site. Overrides --location.",
+    )
+    parser.add_argument(
+        "--site-id",
+        default=env_value("ONENOTE_SITE_ID"),
+        help="Resolved Graph site ID: hostname,siteCollectionGuid,webGuid. Overrides --site-url and --location.",
     )
     parser.add_argument(
         "--out",
@@ -570,7 +593,7 @@ def main(
 
     try:
         formats = parse_formats(args.formats)
-        scopes = SITE_URL_SCOPES if args.site_url else DEFAULT_SCOPES
+        scopes = SITE_URL_SCOPES if args.site_url and not args.site_id else DEFAULT_SCOPES
         token = token_provider(
             client_id=args.client_id,
             tenant_id=args.tenant_id,
@@ -578,11 +601,12 @@ def main(
             cache_path=Path(args.cache),
         )
         client = client_factory(token)
-        location = (
-            resolve_sharepoint_site_location(client, args.site_url)
-            if args.site_url
-            else normalize_location(args.location)
-        )
+        if args.site_id:
+            location = site_id_to_site_location(args.site_id)
+        elif args.site_url:
+            location = resolve_sharepoint_site_location(client, args.site_url)
+        else:
+            location = normalize_location(args.location)
 
         if args.list:
             print_notebooks(client, location)

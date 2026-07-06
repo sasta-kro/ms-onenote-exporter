@@ -95,6 +95,26 @@ class SharePointUrlTests(unittest.TestCase):
             params={"$select": "id,displayName,webUrl"},
         )
 
+    def test_site_id_to_site_location_accepts_graph_site_id(self) -> None:
+        result = export_onenote.site_id_to_site_location(
+            "school.sharepoint.com,site-guid,web-guid"
+        )
+
+        self.assertEqual(result, "/sites/school.sharepoint.com,site-guid,web-guid")
+
+    def test_site_id_to_site_location_accepts_prefixed_location(self) -> None:
+        result = export_onenote.site_id_to_site_location(
+            "/sites/school.sharepoint.com,site-guid,web-guid"
+        )
+
+        self.assertEqual(result, "/sites/school.sharepoint.com,site-guid,web-guid")
+
+    def test_site_id_to_site_location_rejects_path_lookup_shape(self) -> None:
+        with self.assertRaises(ValueError):
+            export_onenote.site_id_to_site_location(
+                "school.sharepoint.com:/sites/GDD542:"
+            )
+
 
 class SectionTraversalTests(unittest.TestCase):
     def test_iter_sections_walks_nested_section_groups(self) -> None:
@@ -235,6 +255,19 @@ class CliTests(unittest.TestCase):
         )
 
         self.assertEqual(args.site_url, "https://school.sharepoint.com/sites/GDD542/Shared%20Documents")
+
+    def test_parse_args_accepts_site_id(self) -> None:
+        args = export_onenote.parse_args(
+            [
+                "--client-id",
+                "abc",
+                "--site-id",
+                "school.sharepoint.com,site-guid,web-guid",
+            ],
+            env_file=None,
+        )
+
+        self.assertEqual(args.site_id, "school.sharepoint.com,site-guid,web-guid")
 
     def test_parse_args_treats_blank_env_values_as_missing(self) -> None:
         with patch.dict(
@@ -407,6 +440,40 @@ class CliTests(unittest.TestCase):
             "/sites/school.sharepoint.com:/teams/2026-GDD-542:",
             params={"$select": "id,displayName,webUrl"},
         )
+        client.list_notebooks.assert_called_once_with(
+            "/sites/school.sharepoint.com,site-guid,web-guid"
+        )
+
+    def test_main_uses_site_id_without_sites_read_scope(self) -> None:
+        token_provider = Mock(return_value="token")
+        client = Mock()
+        client.list_notebooks.return_value = []
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(export_onenote, "load_dotenv", return_value=False),
+            patch("builtins.print"),
+        ):
+            exit_code = export_onenote.main(
+                [
+                    "--client-id",
+                    "abc",
+                    "--site-id",
+                    "school.sharepoint.com,site-guid,web-guid",
+                    "--list",
+                ],
+                token_provider=token_provider,
+                client_factory=lambda token: client,
+            )
+
+        self.assertEqual(exit_code, 0)
+        token_provider.assert_called_once_with(
+            client_id="abc",
+            tenant_id="organizations",
+            scopes=["Notes.Read.All"],
+            cache_path=Path(".msal_token_cache.json"),
+        )
+        client.json.assert_not_called()
         client.list_notebooks.assert_called_once_with(
             "/sites/school.sharepoint.com,site-guid,web-guid"
         )
