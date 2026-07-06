@@ -249,11 +249,11 @@ Output is organized like this:
 ```text
 OneNoteExport/
   Notebook Name/
+    manifest.json
     Section Name/
       Page title-abc123.html
       Page title-abc123.md
       Page title-abc123.txt
-  manifest.json
 ```
 
 The short suffix in each filename comes from the OneNote page ID. It helps avoid

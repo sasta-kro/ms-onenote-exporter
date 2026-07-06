@@ -601,13 +601,14 @@ def export_notebooks(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     total_pages = 0
-    manifest: list[dict[str, str]] = []
+    notebook_outputs: list[tuple[str, Path, Path]] = []
 
     for notebook in notebooks:
         notebook_name = notebook.get("displayName") or "Untitled notebook"
         print(f"\nNotebook: {notebook_name}")
         notebook_dir = output_dir / safe_name(notebook_name)
         notebook_dir.mkdir(parents=True, exist_ok=True)
+        notebook_manifest: list[dict[str, str]] = []
 
         for section_path, section in iter_sections(client, notebook):
             section_dir = notebook_dir / safe_name(section_path)
@@ -627,14 +628,19 @@ def export_notebooks(
                 )
                 record["notebook"] = notebook_name
                 record["section"] = section_path
-                manifest.append(record)
+                notebook_manifest.append(record)
                 total_pages += 1
 
-    manifest_path = output_dir / "manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        manifest_path = notebook_dir / "manifest.json"
+        manifest_path.write_text(json.dumps(notebook_manifest, indent=2), encoding="utf-8")
+        notebook_outputs.append((notebook_name, notebook_dir, manifest_path))
+
     print(f"\nExported {total_pages} page(s).")
-    print(f"Output: {output_dir}")
-    print(f"Manifest: {manifest_path}")
+    print(f"Output root: {output_dir}")
+    for notebook_name, notebook_dir, manifest_path in notebook_outputs:
+        print(f"Notebook output: {notebook_name}")
+        print(f"  Folder: {notebook_dir}")
+        print(f"  Manifest: {manifest_path}")
     return total_pages
 
 

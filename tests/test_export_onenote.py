@@ -180,6 +180,49 @@ class SectionTraversalTests(unittest.TestCase):
 
 
 class ExportNotebookTests(unittest.TestCase):
+    def test_export_notebooks_writes_manifest_inside_each_notebook_dir(self) -> None:
+        client = Mock()
+        client.list_notebooks.return_value = [
+            {
+                "displayName": "Course Notes",
+                "sectionsUrl": "sections-url",
+            }
+        ]
+        client.paginate.return_value = [
+            {
+                "displayName": "Week 1",
+                "pagesUrl": "pages-url",
+            }
+        ]
+        client.list_pages.return_value = [
+            {
+                "id": "page-1234567890",
+                "title": "Intro",
+                "lastModifiedDateTime": "2026-07-06T00:00:00Z",
+            }
+        ]
+        client.bytes.return_value = b"<html><body>Intro</body></html>"
+
+        with tempfile.TemporaryDirectory() as tmpdir, patch("builtins.print"):
+            output_dir = Path(tmpdir) / "out"
+
+            count = export_onenote.export_notebooks(
+                client,
+                location="/me",
+                output_dir=output_dir,
+                notebook_filter="Course",
+                formats=[],
+                include_ids=False,
+            )
+
+            notebook_dir = output_dir / "Course Notes"
+            manifest_path = notebook_dir / "manifest.json"
+
+            self.assertEqual(count, 1)
+            self.assertTrue((notebook_dir / "Week 1" / "Intro-1234567890.html").exists())
+            self.assertTrue(manifest_path.exists())
+            self.assertFalse((output_dir / "manifest.json").exists())
+
     def test_export_notebooks_shows_available_names_when_filter_matches_nothing(self) -> None:
         client = Mock()
         client.list_notebooks.return_value = [
