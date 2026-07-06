@@ -149,7 +149,11 @@ class CliTests(unittest.TestCase):
         self.assertEqual(args.location, "/me")
 
     def test_main_prints_tagged_error_when_client_id_is_missing(self) -> None:
-        with patch.dict(os.environ, {}, clear=True), patch("builtins.print") as print_mock:
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(export_onenote, "load_dotenv", return_value=False),
+            patch("builtins.print") as print_mock,
+        ):
             exit_code = export_onenote.main([], token_provider=Mock())
 
         self.assertEqual(exit_code, 2)
@@ -158,6 +162,31 @@ class CliTests(unittest.TestCase):
             [
                 "[ERROR] Missing Microsoft Entra application/client ID.",
                 "[RECOMMENDATION] Set ONENOTE_CLIENT_ID or pass --client-id.",
+            ],
+        )
+
+    def test_main_explains_missing_dependency_interpreter_mismatch(self) -> None:
+        token_provider = Mock(side_effect=export_onenote.MissingDependencyError("msal"))
+
+        with (
+            patch("builtins.print") as print_mock,
+            patch.object(export_onenote.sys, "executable", "/opt/miniforge3/bin/python3"),
+            patch.object(export_onenote, "local_venv_python", return_value=Path("/project/.venv/bin/python")),
+        ):
+            exit_code = export_onenote.main(
+                ["--client-id", "abc"],
+                token_provider=token_provider,
+            )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(
+            [call.args[0] for call in print_mock.call_args_list],
+            [
+                "[ERROR] Missing dependency 'msal' in the active Python interpreter.",
+                "[INFO] Active Python: /opt/miniforge3/bin/python3",
+                "[INFO] Project venv Python: /project/.venv/bin/python",
+                "[RECOMMENDATION] In PyCharm, set the Project Interpreter to: /project/.venv/bin/python",
+                "[RECOMMENDATION] Then rerun main.py. Your dependencies are installed in the project .venv, not Miniforge base.",
             ],
         )
 

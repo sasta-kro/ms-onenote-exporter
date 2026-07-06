@@ -28,12 +28,38 @@ class GraphError(RuntimeError):
     """Raised when Microsoft Graph returns an unrecoverable error."""
 
 
+class MissingDependencyError(RuntimeError):
+    def __init__(self, package: str) -> None:
+        self.package = package
+        super().__init__(f"Missing dependency '{package}'.")
+
+
 def log_error(message: str) -> None:
     print(f"[ERROR] {message}")
 
 
+def log_info(message: str) -> None:
+    print(f"[INFO] {message}")
+
+
 def log_recommendation(message: str) -> None:
     print(f"[RECOMMENDATION] {message}")
+
+
+def local_venv_python() -> Path:
+    return Path(__file__).resolve().parent / ".venv" / "bin" / "python"
+
+
+def log_missing_dependency(error: MissingDependencyError) -> None:
+    venv_python = local_venv_python()
+    log_error(f"Missing dependency '{error.package}' in the active Python interpreter.")
+    log_info(f"Active Python: {sys.executable}")
+    log_info(f"Project venv Python: {venv_python}")
+    log_recommendation(f"In PyCharm, set the Project Interpreter to: {venv_python}")
+    log_recommendation(
+        "Then rerun main.py. Your dependencies are installed in the project .venv, "
+        "not Miniforge base."
+    )
 
 
 def safe_name(value: str | None, fallback: str = "untitled", limit: int = 140) -> str:
@@ -158,10 +184,7 @@ class GraphClient:
         try:
             import requests
         except ImportError as exc:
-            raise RuntimeError(
-                "Missing dependency 'requests'. Install dependencies with: "
-                "python -m pip install -r requirements.txt"
-            ) from exc
+            raise MissingDependencyError("requests") from exc
 
         request_headers = dict(headers or {})
         request_headers["Authorization"] = f"Bearer {self.token}"
@@ -251,10 +274,7 @@ def get_token(
     try:
         import msal
     except ImportError as exc:
-        raise RuntimeError(
-            "Missing dependency 'msal'. Install dependencies with: "
-            "python -m pip install -r requirements.txt"
-        ) from exc
+        raise MissingDependencyError("msal") from exc
 
     cache = msal.SerializableTokenCache()
     if cache_path.exists():
@@ -481,6 +501,9 @@ def main(
             include_ids=args.include_ids,
         )
         return 0
+    except MissingDependencyError as exc:
+        log_missing_dependency(exc)
+        return 1
     except (GraphError, RuntimeError, argparse.ArgumentTypeError) as exc:
         print(str(exc), file=sys.stderr)
         return 1

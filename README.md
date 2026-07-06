@@ -102,6 +102,22 @@ commands you typed in a separate terminal. The project therefore supports a
 local `.env` file and a small `main.py` entrypoint so the run button can work
 without custom shell setup.
 
+Make sure PyCharm uses this project's virtualenv, not Miniforge/Conda base:
+
+```text
+PyCharm > Settings > Project > Python Interpreter
+```
+
+Select:
+
+```text
+<project folder>/.venv/bin/python
+```
+
+If PyCharm runs something like `/Users/.../miniforge3/bin/python3`, it is using
+the wrong interpreter. Dependencies installed into `.venv` will not be visible
+there.
+
 For a portable setup on another machine:
 
 ```bash
