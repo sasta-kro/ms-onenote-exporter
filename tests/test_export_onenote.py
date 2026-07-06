@@ -234,6 +234,27 @@ class CliTests(unittest.TestCase):
             ],
         )
 
+    def test_log_device_flow_prints_code_and_url_explicitly(self) -> None:
+        flow = {
+            "user_code": "SRNMMXBNA",
+            "verification_uri": "https://login.microsoft.com/device",
+            "expires_in": 1800,
+        }
+
+        with patch("builtins.print") as print_mock:
+            export_onenote.log_device_flow(flow)
+
+        self.assertEqual(
+            [call.args[0] for call in print_mock.call_args_list],
+            [
+                "[ACTION] Open this URL in your browser: https://login.microsoft.com/device",
+                "[DEVICE CODE] SRNMMXBNA",
+                "[ACTION] Paste the device code above into the Microsoft page, then click Next.",
+                "[INFO] The code is printed here in the terminal. It is not in Teams or OneNote.",
+                "[INFO] Code expires in about 30 minutes.",
+            ],
+        )
+
     def test_main_lists_notebooks_without_exporting_pages(self) -> None:
         token_provider = Mock(return_value="token")
         client = Mock()
@@ -241,7 +262,11 @@ class CliTests(unittest.TestCase):
             {"displayName": "Course Notes", "isShared": True, "userRole": "Reader"}
         ]
 
-        with patch("builtins.print") as print_mock:
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(export_onenote, "load_dotenv", return_value=False),
+            patch("builtins.print") as print_mock,
+        ):
             exit_code = export_onenote.main(
                 ["--client-id", "abc", "--list"],
                 token_provider=token_provider,

@@ -138,9 +138,10 @@ List notebooks first:
 python main.py --list
 ```
 
-On first run, the terminal will print a Microsoft device-login URL and code.
-Open the URL, enter the code, and sign in with the Microsoft account that can
-access the OneNote notebooks.
+On first run, the terminal will print a Microsoft device-login URL and a
+`[DEVICE CODE]` line. Open the URL, enter the code from the terminal into the
+Microsoft page, and sign in with the Microsoft account that can access the
+OneNote notebooks. The code is not in Teams or OneNote.
 
 Export everything visible to your account as HTML:
 

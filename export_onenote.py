@@ -42,6 +42,14 @@ def log_info(message: str) -> None:
     print(f"[INFO] {message}")
 
 
+def log_action(message: str) -> None:
+    print(f"[ACTION] {message}")
+
+
+def log_device_code(code: str) -> None:
+    print(f"[DEVICE CODE] {code}")
+
+
 def log_recommendation(message: str) -> None:
     print(f"[RECOMMENDATION] {message}")
 
@@ -79,6 +87,23 @@ def log_runtime_error(error: RuntimeError) -> None:
         log_info("Original error: AADSTS50059")
         return
     print(message, file=sys.stderr)
+
+
+def log_device_flow(flow: dict[str, Any]) -> None:
+    code = flow["user_code"]
+    url = flow.get("verification_uri") or flow.get("verification_url")
+    if not url:
+        url = "https://login.microsoft.com/device"
+
+    log_action(f"Open this URL in your browser: {url}")
+    log_device_code(code)
+    log_action("Paste the device code above into the Microsoft page, then click Next.")
+    log_info("The code is printed here in the terminal. It is not in Teams or OneNote.")
+
+    expires_in = flow.get("expires_in")
+    if isinstance(expires_in, int) and expires_in > 0:
+        minutes = max(1, round(expires_in / 60))
+        log_info(f"Code expires in about {minutes} minutes.")
 
 
 def safe_name(value: str | None, fallback: str = "untitled", limit: int = 140) -> str:
@@ -314,7 +339,7 @@ def get_token(
         flow = app.initiate_device_flow(scopes=scopes)
         if "user_code" not in flow:
             raise RuntimeError(f"Could not start Microsoft device login: {flow}")
-        print(flow["message"])
+        log_device_flow(flow)
         result = app.acquire_token_by_device_flow(flow)
 
     if cache.has_state_changed:
