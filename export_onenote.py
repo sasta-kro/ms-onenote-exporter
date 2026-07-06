@@ -47,7 +47,34 @@ def parse_formats(value: str) -> list[str]:
     return formats
 
 
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+def unquote_env_value(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    return value
+
+
+def load_dotenv(path: Path = Path(".env"), *, override: bool = False) -> bool:
+    if not path.exists():
+        return False
+
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        key = key.strip()
+        if not key or not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", key):
+            continue
+        if override or key not in os.environ:
+            os.environ[key] = unquote_env_value(value)
+    return True
+
+
+def parse_args(argv: list[str] | None = None, env_file: Path | None = Path(".env")) -> argparse.Namespace:
+    if env_file is not None:
+        load_dotenv(env_file)
+
     parser = argparse.ArgumentParser(
         description="Export OneNote pages visible to your Microsoft account as local HTML files."
     )
@@ -59,20 +86,28 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--location",
-        default="/me",
+        default=os.getenv("ONENOTE_LOCATION", "/me"),
         help="Graph location root: /me, /users/{id}, /groups/{id}, or /sites/{id}.",
     )
-    parser.add_argument("--out", default="onenote_export", help="Output directory.")
-    parser.add_argument("--notebook", help="Only export notebooks whose name contains this text.")
+    parser.add_argument(
+        "--out",
+        default=os.getenv("ONENOTE_OUT", "onenote_export"),
+        help="Output directory.",
+    )
+    parser.add_argument(
+        "--notebook",
+        default=os.getenv("ONENOTE_NOTEBOOK"),
+        help="Only export notebooks whose name contains this text.",
+    )
     parser.add_argument(
         "--formats",
-        default="",
+        default=os.getenv("ONENOTE_FORMATS", ""),
         help="Optional comma-separated conversions: md,txt,rtf. Empty means HTML only.",
     )
     parser.add_argument("--list", action="store_true", help="List notebooks and exit.")
     parser.add_argument(
         "--cache",
-        default=".msal_token_cache.json",
+        default=os.getenv("ONENOTE_TOKEN_CACHE", ".msal_token_cache.json"),
         help="MSAL token cache path. Keep this private.",
     )
     parser.add_argument(

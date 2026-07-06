@@ -14,3 +14,4 @@ OneNoteExport/
 # Local environment files
 .env
 .env.*
+!.env.example

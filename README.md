@@ -73,22 +73,53 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-Put your Entra Application/client ID in the shell:
+Create your local `.env` file:
 
 ```bash
-export ONENOTE_CLIENT_ID="paste-your-application-client-id-here"
-export ONENOTE_TENANT_ID="organizations"
+cp .env.example .env
+```
+
+Then edit `.env` and paste your Entra Application/client ID:
+
+```text
+ONENOTE_CLIENT_ID=paste-your-application-client-id-here
+ONENOTE_TENANT_ID=organizations
 ```
 
 `organizations` is a good default for work/school Microsoft accounts. You can
 replace it with your tenant ID or tenant domain if needed.
+
+The script loads `.env` automatically before reading CLI defaults. Real shell
+environment variables still win over `.env` values, and explicit CLI arguments
+win over both.
+
+## PyCharm Run Button
+
+Use [main.py](main.py) as the PyCharm run target.
+
+Why this exists: PyCharm's run button does not automatically inherit `export ...`
+commands you typed in a separate terminal. The project therefore supports a
+local `.env` file and a small `main.py` entrypoint so the run button can work
+without custom shell setup.
+
+For a portable setup on another machine:
+
+```bash
+git pull
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+cp .env.example .env
+```
+
+Then fill in `.env` and run `main.py` from PyCharm or the terminal.
 
 ## Usage
 
 List notebooks first:
 
 ```bash
-python export_onenote.py --list
+python main.py --list
 ```
 
 On first run, the terminal will print a Microsoft device-login URL and code.
@@ -98,26 +129,34 @@ access the OneNote notebooks.
 Export everything visible to your account as HTML:
 
 ```bash
-python export_onenote.py --out ~/OneNoteExport
+python main.py --out ~/OneNoteExport
 ```
 
 Export only notebooks whose name contains some text:
 
 ```bash
-python export_onenote.py --out ~/OneNoteExport --notebook "CSX4107"
+python main.py --out ~/OneNoteExport --notebook "CSX4107"
 ```
 
 Export HTML and also convert to Markdown and TXT:
 
 ```bash
-python export_onenote.py --out ~/OneNoteExport --formats md,txt
+python main.py --out ~/OneNoteExport --formats md,txt
 ```
 
 Export from another Microsoft Graph OneNote root:
 
 ```bash
-python export_onenote.py --location "/groups/GROUP_ID" --out ~/OneNoteExport
-python export_onenote.py --location "/sites/SITE_ID" --out ~/OneNoteExport
+python main.py --location "/groups/GROUP_ID" --out ~/OneNoteExport
+python main.py --location "/sites/SITE_ID" --out ~/OneNoteExport
+```
+
+You can also put stable defaults in `.env` instead of typing flags every time:
+
+```text
+ONENOTE_OUT=~/OneNoteExport
+ONENOTE_NOTEBOOK=CSX4107
+ONENOTE_FORMATS=md,txt
 ```
 
 ## Output

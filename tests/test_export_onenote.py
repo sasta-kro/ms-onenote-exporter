@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import os
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -90,8 +92,56 @@ class SectionTraversalTests(unittest.TestCase):
 
 
 class CliTests(unittest.TestCase):
+    def test_load_dotenv_reads_simple_project_env_without_overriding_existing_values(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_path = Path(tmpdir) / ".env"
+            env_path.write_text(
+                "\n".join(
+                    [
+                        "ONENOTE_CLIENT_ID=from-file",
+                        "ONENOTE_TENANT_ID='quoted-tenant'",
+                        "ONENOTE_FORMATS=\"md,txt\"",
+                        "IGNORED_LINE",
+                        "# comment",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {"ONENOTE_CLIENT_ID": "already-set"}, clear=False):
+                loaded = export_onenote.load_dotenv(env_path)
+
+                self.assertTrue(loaded)
+                self.assertEqual(os.environ["ONENOTE_CLIENT_ID"], "already-set")
+                self.assertEqual(os.environ["ONENOTE_TENANT_ID"], "quoted-tenant")
+                self.assertEqual(os.environ["ONENOTE_FORMATS"], "md,txt")
+
+    def test_parse_args_uses_dotenv_values_for_pycharm_style_run(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_path = Path(tmpdir) / ".env"
+            env_path.write_text(
+                "\n".join(
+                    [
+                        "ONENOTE_CLIENT_ID=abc",
+                        "ONENOTE_OUT=~/OneNoteExport",
+                        "ONENOTE_NOTEBOOK=CSX4107",
+                        "ONENOTE_FORMATS=md,txt",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {}, clear=True):
+                args = export_onenote.parse_args([], env_file=env_path)
+
+        self.assertEqual(args.client_id, "abc")
+        self.assertEqual(args.out, "~/OneNoteExport")
+        self.assertEqual(args.notebook, "CSX4107")
+        self.assertEqual(args.formats, "md,txt")
+
     def test_parse_args_defaults_to_html_only_and_organizations_tenant(self) -> None:
-        args = export_onenote.parse_args(["--client-id", "abc"])
+        with patch.dict(os.environ, {}, clear=True):
+            args = export_onenote.parse_args(["--client-id", "abc"], env_file=None)
 
         self.assertEqual(args.client_id, "abc")
         self.assertEqual(args.tenant_id, "organizations")
