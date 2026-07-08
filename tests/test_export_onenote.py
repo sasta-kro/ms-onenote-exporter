@@ -735,6 +735,67 @@ class CliTests(unittest.TestCase):
             [call.args[0] for call in print_mock.call_args_list],
         )
 
+    def test_main_auto_exports_single_site_url_notebook_as_html_when_not_list_only(self) -> None:
+        token_provider = Mock(return_value="token")
+        client = Mock()
+        client.list_notebooks.return_value = [
+            {"displayName": "2026-1 BAD 542 Notebook", "isShared": False, "userRole": "Owner"}
+        ]
+        stdin = FakeInteractiveStdin(
+            "\n".join(
+                [
+                    '<d:Id m:type="Edm.Guid">80a26a44-cf5b-42b2-bf61-c3a021fa18c7</d:Id>',
+                    "",
+                    '<d:Id m:type="Edm.Guid">5dbbcfdd-641d-42ed-b89a-2cb2451897ef</d:Id>',
+                    "",
+                ]
+            )
+        )
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(export_onenote, "load_dotenv", return_value=False),
+            patch.object(export_onenote, "export_notebooks", return_value=1) as export_mock,
+            patch("builtins.print") as print_mock,
+            patch("sys.stdin", stdin),
+        ):
+            exit_code = export_onenote.main(
+                [
+                    "--client-id",
+                    "abc",
+                    "--site-url",
+                    "https://school.sharepoint.com/teams/2026-GDD-542/Shared%20Documents",
+                ],
+                token_provider=token_provider,
+                client_factory=lambda token: client,
+            )
+
+        self.assertEqual(exit_code, 0)
+        export_mock.assert_called_once_with(
+            client,
+            location="/sites/school.sharepoint.com,80a26a44-cf5b-42b2-bf61-c3a021fa18c7,5dbbcfdd-641d-42ed-b89a-2cb2451897ef",
+            output_dir=Path("onenote_export").resolve(),
+            notebook_filter="2026-1 BAD 542 Notebook",
+            formats=[],
+            include_image_links=False,
+        )
+        self.assertIn(
+            export_onenote.section_heading("Auto-downloading the only notebook as HTML"),
+            [call.args[0] for call in print_mock.call_args_list],
+        )
+        self.assertIn(
+            export_onenote.copy_block(
+                'python main.py --site-id "school.sharepoint.com,80a26a44-cf5b-42b2-bf61-c3a021fa18c7,5dbbcfdd-641d-42ed-b89a-2cb2451897ef" --notebook "2026-1 BAD 542 Notebook" --formats md'
+            ),
+            [call.args[0] for call in print_mock.call_args_list],
+        )
+        self.assertIn(
+            export_onenote.copy_block(
+                'python main.py --site-id "school.sharepoint.com,80a26a44-cf5b-42b2-bf61-c3a021fa18c7,5dbbcfdd-641d-42ed-b89a-2cb2451897ef" --notebook "2026-1 BAD 542 Notebook" --formats rtf'
+            ),
+            [call.args[0] for call in print_mock.call_args_list],
+        )
+
     def test_main_returns_clear_error_when_interactive_site_url_paste_has_no_guid(self) -> None:
         stdin = FakeInteractiveStdin("not the XML page\n\n")
 

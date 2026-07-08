@@ -97,7 +97,7 @@ This is the Teams/SharePoint site that stores the notebook file. You usually do 
 ╰────────────────────────────────────────────────────────────╯
 >
 
->>>>> Reusable command
+>>>>> Reusable command to see Notebooks in the link
 
     python main.py --site-id "yourtenant.sharepoint.com,SITE_GUID,WEB_GUID" --list
 
@@ -105,6 +105,16 @@ This is the Teams/SharePoint site that stores the notebook file. You usually do 
 ╭────────────────────────────╮
 │ 1. 2026-1 BAD 542 Notebook │
 ╰────────────────────────────╯
+
+>>>>> Auto-downloading the only notebook as HTML
+╭─────────────────────────╮
+│ 2026-1 BAD 542 Notebook │
+╰─────────────────────────╯
+
+>>>>> Optional Markdown/RTF commands
+
+    python main.py --site-id "yourtenant.sharepoint.com,SITE_GUID,WEB_GUID" --notebook "2026-1 BAD 542 Notebook" --formats md
+    python main.py --site-id "yourtenant.sharepoint.com,SITE_GUID,WEB_GUID" --notebook "2026-1 BAD 542 Notebook" --formats rtf
 ```
 
 Open the Step 1 and Step 2 links in the browser where you are already signed
@@ -112,18 +122,28 @@ into your school account. Each page shows one GUID. You can paste the whole
 page text, including the browser's "This XML file does not appear..." message,
 or just the `<d:Id>...</d:Id>` XML line. The app extracts the GUID for you.
 
-After both values are pasted, the app lists notebooks automatically. It also
-prints a reusable `--site-id` command so you can skip the paste step next time.
-If the app is running in a non-interactive shell, it prints the manual helper
-links and command instead of prompting.
+After both values are pasted, the app lists notebooks automatically. If exactly
+one notebook is available, it downloads that notebook as HTML immediately. It
+also prints optional Markdown and RTF commands for later.
 
-Example:
+If you only want to list notebooks without downloading, add `--list`:
+
+```bash
+python main.py --site-url "PASTE_TEAMS_OR_ONENOTE_BROWSER_LINK" --list
+```
+
+The app also prints a reusable `--site-id` command so you can skip the paste
+step next time. If the app is running in a non-interactive shell, it prints the
+manual helper links and command instead of prompting.
+
+Reusable site ID example:
 
 ```bash
 python main.py --site-id "assumptionuniversity.sharepoint.com,80a26a44-cf5b-42b2-bf61-c3a021fa18c7,5dbbcfdd-641d-42ed-b89a-2cb2451897ef" --list
 ```
 
-After listing, the app prints the exact command to download one notebook:
+When a site has more than one notebook, copy the exact command printed under
+`To download one notebook`:
 
 ```text
 >>>>> To download one notebook
@@ -131,7 +151,7 @@ After listing, the app prints the exact command to download one notebook:
     python main.py --site-id "..." --notebook "2026-1 BAD 542 Notebook"
 ```
 
-Run that command to export the notebook.
+Run that command to export the chosen notebook.
 
 ## Output
 

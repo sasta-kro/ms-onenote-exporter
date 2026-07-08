@@ -282,7 +282,7 @@ def prompt_for_site_id_from_site_url(
     print(section_heading("Resolved site ID"))
     print(ascii_box([site_id]))
     print("")
-    print(section_heading("Reusable command"))
+    print(section_heading("Reusable command to see Notebooks in the link"))
     print("")
     print(copy_block(f"python main.py --site-id {shell_double_quote(site_id)} {next_flag}"))
     print("")
@@ -879,11 +879,19 @@ def export_notebooks(
     return total_pages
 
 
-def print_notebooks(client: GraphClient, location: str, export_command_base: str | None = None) -> None:
+def print_optional_format_commands(export_command_base: str, notebook_name: str) -> None:
+    print("")
+    print(section_heading("Optional Markdown/RTF commands"))
+    print("")
+    print(copy_block(f"{export_command_base} --notebook {shell_double_quote(notebook_name)} --formats md"))
+    print(copy_block(f"{export_command_base} --notebook {shell_double_quote(notebook_name)} --formats rtf"))
+
+
+def print_notebooks(client: GraphClient, location: str, export_command_base: str | None = None) -> list[dict[str, Any]]:
     notebooks = client.list_notebooks(location)
     if not notebooks:
         print("No notebooks found.")
-        return
+        return []
     notebook_lines: list[str] = []
     for index, notebook in enumerate(notebooks, start=1):
         name = notebook.get("displayName") or "Untitled notebook"
@@ -896,6 +904,7 @@ def print_notebooks(client: GraphClient, location: str, export_command_base: str
         print(section_heading("To download one notebook"))
         print("")
         print(copy_block(f"{export_command_base} --notebook {shell_double_quote(first_name)}"))
+    return notebooks
 
 
 def main(
@@ -904,12 +913,15 @@ def main(
     token_provider: Callable[..., str] = get_token,
     client_factory: Callable[[str], GraphClient] = GraphClient,
 ) -> int:
+    raw_argv = list(argv) if argv is not None else sys.argv[1:]
+    explicit_list = "--list" in raw_argv
+    auto_export_single_site_url_notebook = False
+
     args = parse_args(argv)
     if args.site_url and not args.site_id:
         try:
             if sys.stdin.isatty():
-                if not args.notebook:
-                    args.list = True
+                auto_export_single_site_url_notebook = not explicit_list and not args.notebook
                 args.site_id = prompt_for_site_id_from_site_url(
                     args.site_url,
                     input_stream=sys.stdin,
@@ -953,6 +965,28 @@ def main(
 
         if args.list:
             print_notebooks(client, location, export_command_base=export_command_base)
+            return 0
+
+        if auto_export_single_site_url_notebook:
+            notebooks = print_notebooks(client, location, export_command_base=export_command_base)
+            if len(notebooks) == 1:
+                notebook_name = notebooks[0].get("displayName") or "Untitled notebook"
+                print("")
+                print(section_heading("Auto-downloading the only notebook as HTML"))
+                print(ascii_box([notebook_name]))
+                export_notebooks(
+                    client,
+                    location=location,
+                    output_dir=Path(args.out).expanduser().resolve(),
+                    notebook_filter=notebook_name,
+                    formats=[],
+                    include_image_links=args.include_image_links,
+                )
+                print_optional_format_commands(export_command_base, notebook_name)
+            elif len(notebooks) > 1:
+                print("")
+                log_info("More than one notebook was found, so nothing was auto-downloaded.")
+                log_recommendation("Copy one of the notebook download commands above.")
             return 0
 
         export_notebooks(
