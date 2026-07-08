@@ -243,21 +243,74 @@ python main.py --site-id "yourtenant.sharepoint.com,siteCollectionGuid,webGuid" 
 The app reads `.env` automatically. CLI flags override `.env`, and real shell
 environment variables override `.env` too.
 
-Useful `.env` values:
+Start by copying the example file:
+
+```bash
+cp .env.example .env
+```
+
+Then fill in the values you actually want to reuse across runs.
+
+Required:
 
 ```text
 ONENOTE_CLIENT_ID=paste-your-application-client-id-here
 ONENOTE_TENANT_ID=organizations
+```
+
+`ONENOTE_CLIENT_ID` comes from your Microsoft Entra app registration:
+
+1. Open the Microsoft Entra admin center or Azure portal.
+2. Go to `App registrations`.
+3. Open the app registration you created for this exporter.
+4. Copy `Application (client) ID` from the app's Overview page.
+
+This is not your student ID, email address, tenant ID, or SharePoint ID.
+
+Keep `ONENOTE_TENANT_ID=organizations` for normal uni/work Teams notebooks.
+That tells Microsoft login to use work/school accounts. If you intentionally
+need something else, valid values include a Directory tenant GUID, a tenant
+domain like `yourschool.edu`, `common`, or `consumers`.
+
+Useful optional values:
+
+```text
 ONENOTE_SITE_ID=yourtenant.sharepoint.com,siteCollectionGuid,webGuid
 ONENOTE_OUT=onenote_export
-ONENOTE_NOTEBOOK=2026-1 BAD 542 Notebook
 ONENOTE_FORMATS=
+ONENOTE_NOTEBOOK=2026-1 BAD 542 Notebook
+ONENOTE_TOKEN_CACHE=.msal_token_cache.json
+```
+
+`ONENOTE_SITE_ID` is the reusable SharePoint/Graph site ID for one Teams/Class
+Notebook site. Get it by running:
+
+```bash
+python main.py --site-url "PASTE_TEAMS_OR_ONENOTE_BROWSER_LINK"
+```
+
+Open the two helper links the app prints, paste each XML page back into the
+terminal, then copy the `Resolved site ID` value into `.env`.
+
+Use `ONENOTE_FORMATS` for extra formats next to HTML, for example `md`, `txt`,
+`rtf`, or `md,txt`. HTML is always exported, so `html` is accepted but does not
+add another file. Markdown/TXT/RTF conversion needs Pandoc:
+
+```bash
+brew install pandoc
 ```
 
 Once `ONENOTE_SITE_ID` and `ONENOTE_NOTEBOOK` are set, you can usually run:
 
 ```bash
 python main.py
+```
+
+For first-time Teams/Class Notebook links, prefer the CLI flag instead of
+storing the pasted browser URL in `.env`:
+
+```bash
+python main.py --site-url "PASTE_TEAMS_OR_ONENOTE_BROWSER_LINK"
 ```
 
 ## Requirements

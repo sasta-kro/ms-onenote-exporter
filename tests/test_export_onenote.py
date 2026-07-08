@@ -380,6 +380,28 @@ class ExportNotebookTests(unittest.TestCase):
 
 
 class CliTests(unittest.TestCase):
+    def test_env_example_documents_portable_env_keys_only(self) -> None:
+        env_example = Path(".env.example").read_text(encoding="utf-8")
+        env_keys = [
+            line.split("=", 1)[0]
+            for line in env_example.splitlines()
+            if line.startswith("ONENOTE_") and "=" in line
+        ]
+
+        self.assertEqual(
+            env_keys,
+            [
+                "ONENOTE_CLIENT_ID",
+                "ONENOTE_TENANT_ID",
+                "ONENOTE_SITE_ID",
+                "ONENOTE_OUT",
+                "ONENOTE_FORMATS",
+                "ONENOTE_NOTEBOOK",
+                "ONENOTE_TOKEN_CACHE",
+            ],
+        )
+        self.assertNotIn("ONENOTE_SITE_URL=", env_example)
+
     def test_load_dotenv_reads_simple_project_env_without_overriding_existing_values(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             env_path = Path(tmpdir) / ".env"
