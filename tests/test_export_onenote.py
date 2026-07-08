@@ -50,17 +50,17 @@ class CliHeadingTests(unittest.TestCase):
 
         self.assertEqual(result, '    python main.py --site-id "abc" --list')
 
-    def test_ascii_box_formats_info_values(self) -> None:
+    def test_ascii_box_formats_info_values_with_rounded_unicode_box(self) -> None:
         result = export_onenote.ascii_box(["1. Course Notebook", "2. Lab Notebook"])
 
         self.assertEqual(
             result,
             "\n".join(
                 [
-                    "+--------------------+",
-                    "| 1. Course Notebook |",
-                    "| 2. Lab Notebook    |",
-                    "+--------------------+",
+                    "╭────────────────────╮",
+                    "│ 1. Course Notebook │",
+                    "│ 2. Lab Notebook    │",
+                    "╰────────────────────╯",
                 ]
             ),
         )
@@ -78,7 +78,6 @@ class CliHeadingTests(unittest.TestCase):
             export_onenote.ascii_box(
                 [
                     "After pasting the XML text, press ENTER twice to continue.",
-                    "The second Enter submits the blank line.",
                 ]
             ),
             [call.args[0] for call in print_mock.call_args_list],

@@ -20,7 +20,12 @@ GRAPH_ROOT = "https://graph.microsoft.com/v1.0"
 DEFAULT_SCOPES = ["Notes.Read.All"]
 SECTION_HEADING_DECORATION_TEXT = ">>>>> {text}"
 COPY_BLOCK_INDENT = "    "
-INFO_BOX_HORIZONTAL = "-"
+INFO_BOX_TOP_LEFT = "╭"
+INFO_BOX_TOP_RIGHT = "╮"
+INFO_BOX_BOTTOM_LEFT = "╰"
+INFO_BOX_BOTTOM_RIGHT = "╯"
+INFO_BOX_HORIZONTAL = "─"
+INFO_BOX_VERTICAL = "│"
 GUID_PATTERN = re.compile(
     r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
 )
@@ -78,10 +83,11 @@ def copy_block(value: str) -> str:
 def ascii_box(lines: list[str]) -> str:
     content = [str(line) for line in lines] or [""]
     width = max(len(line) for line in content)
-    border = f"+{INFO_BOX_HORIZONTAL * (width + 2)}+"
-    boxed_lines = [border]
-    boxed_lines.extend(f"| {line.ljust(width)} |" for line in content)
-    boxed_lines.append(border)
+    top = f"{INFO_BOX_TOP_LEFT}{INFO_BOX_HORIZONTAL * (width + 2)}{INFO_BOX_TOP_RIGHT}"
+    bottom = f"{INFO_BOX_BOTTOM_LEFT}{INFO_BOX_HORIZONTAL * (width + 2)}{INFO_BOX_BOTTOM_RIGHT}"
+    boxed_lines = [top]
+    boxed_lines.extend(f"{INFO_BOX_VERTICAL} {line.ljust(width)} {INFO_BOX_VERTICAL}" for line in content)
+    boxed_lines.append(bottom)
     return "\n".join(boxed_lines)
 
 
@@ -221,7 +227,6 @@ def read_pasted_guid(label: str, input_stream: Any = sys.stdin) -> str:
         ascii_box(
             [
                 "After pasting the XML text, press ENTER twice to continue.",
-                "The second Enter submits the blank line.",
             ]
         )
     )

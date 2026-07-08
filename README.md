@@ -69,19 +69,18 @@ The app prints something like this:
 ```text
 >>>>> Detected notebook storage site (for checking only)
 This is the Teams/SharePoint site that stores the notebook file. You usually do not need to open it.
-+----------------------------------------------------+
-| https://yourtenant.sharepoint.com/sites/Section_... |
-+----------------------------------------------------+
+╭────────────────────────────────────────────────────╮
+│ https://yourtenant.sharepoint.com/sites/Section_... │
+╰────────────────────────────────────────────────────╯
 
 >>>>> Step 1 (SITE_GUID): open this in your signed-in browser
 
     https://yourtenant.sharepoint.com/sites/Section_.../_api/site/id
 
 >>>>> Paste SITE_GUID page text
-+------------------------------------------------------------+
-| After pasting the XML text, press ENTER twice to continue. |
-| The second Enter submits the blank line.                   |
-+------------------------------------------------------------+
+╭────────────────────────────────────────────────────────────╮
+│ After pasting the XML text, press ENTER twice to continue. │
+╰────────────────────────────────────────────────────────────╯
 >
 
 >>>>> Step 2 (WEB_GUID): open this in your signed-in browser
@@ -89,10 +88,9 @@ This is the Teams/SharePoint site that stores the notebook file. You usually do 
     https://yourtenant.sharepoint.com/sites/Section_.../_api/web/id
 
 >>>>> Paste WEB_GUID page text
-+------------------------------------------------------------+
-| After pasting the XML text, press ENTER twice to continue. |
-| The second Enter submits the blank line.                   |
-+------------------------------------------------------------+
+╭────────────────────────────────────────────────────────────╮
+│ After pasting the XML text, press ENTER twice to continue. │
+╰────────────────────────────────────────────────────────────╯
 >
 
 >>>>> Reusable command
@@ -100,9 +98,9 @@ This is the Teams/SharePoint site that stores the notebook file. You usually do 
     python main.py --site-id "yourtenant.sharepoint.com,SITE_GUID,WEB_GUID" --list
 
 >>>>> Available notebooks
-+----------------------------+
-| 1. 2026-1 BAD 542 Notebook |
-+----------------------------+
+╭────────────────────────────╮
+│ 1. 2026-1 BAD 542 Notebook │
+╰────────────────────────────╯
 ```
 
 Open the Step 1 and Step 2 links in the browser where you are already signed
