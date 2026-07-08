@@ -18,7 +18,6 @@ from urllib.parse import quote, unquote, urlparse
 
 GRAPH_ROOT = "https://graph.microsoft.com/v1.0"
 DEFAULT_SCOPES = ["Notes.Read.All"]
-SITE_URL_SCOPES = ["Notes.Read.All", "Sites.Read.All"]
 PANDOC_TARGETS = {
     "md": "gfm",
     "txt": "plain",
@@ -72,11 +71,8 @@ def log_missing_dependency(error: MissingDependencyError) -> None:
     log_error(f"Missing dependency '{error.package}' in the active Python interpreter.")
     log_info(f"Active Python: {sys.executable}")
     log_info(f"Project venv Python: {venv_python}")
-    log_recommendation(f"In PyCharm, set the Project Interpreter to: {venv_python}")
-    log_recommendation(
-        "Then rerun main.py. Your dependencies are installed in the project .venv, "
-        "not Miniforge base."
-    )
+    log_recommendation(f"Run with the project venv Python: {venv_python} main.py")
+    log_recommendation("Or activate the venv before running commands: source .venv/bin/activate")
 
 
 def log_runtime_error(error: RuntimeError) -> None:
@@ -194,32 +190,6 @@ def print_site_id_helper(site_url: str, *, list_notebooks: bool = False, noteboo
     print("")
 
 
-def sharepoint_url_to_site_lookup_path(url: str) -> str:
-    parsed = urlparse(url.strip())
-    host = parsed.netloc.lower()
-    path_parts = [unquote(part) for part in parsed.path.split("/") if part]
-
-    if not host or len(path_parts) < 2 or path_parts[0].lower() not in {"sites", "teams"}:
-        raise ValueError(
-            "Could not infer a SharePoint site from that URL. Expected a URL containing "
-            "/sites/<name>/... or /teams/<name>/..."
-        )
-
-    site_kind = path_parts[0]
-    site_name = path_parts[1]
-    return f"/sites/{host}:/{site_kind}/{quote(site_name, safe='')}:"
-
-
-def resolve_sharepoint_site_location(client: Any, site_url: str) -> str:
-    lookup_path = sharepoint_url_to_site_lookup_path(site_url)
-    site = client.json(lookup_path, params={"$select": "id,displayName,webUrl"})
-    site_id = site.get("id")
-    if not site_id:
-        raise GraphError(f"Could not resolve SharePoint site ID for: {site_url}")
-    log_info(f"Resolved SharePoint site: {site.get('displayName') or site.get('webUrl') or site_id}")
-    return f"/sites/{site_id}"
-
-
 def site_id_to_site_location(site_id: str) -> str:
     value = site_id.strip()
     if value.startswith("/sites/"):
@@ -276,24 +246,14 @@ def parse_args(argv: list[str] | None = None, env_file: Path | None = Path(".env
         help="Microsoft tenant ID, domain, or 'organizations'.",
     )
     parser.add_argument(
-        "--location",
-        default=env_value("ONENOTE_LOCATION", "/me"),
-        help="Graph location root: /me, /users/{id}, /groups/{id}, or /sites/{id}.",
-    )
-    parser.add_argument(
         "--site-url",
         default=env_value("ONENOTE_SITE_URL"),
-        help="Teams/SharePoint URL for a class notebook site. Overrides --location.",
+        help="Teams/SharePoint URL for a class notebook site.",
     )
     parser.add_argument(
         "--site-id",
         default=env_value("ONENOTE_SITE_ID"),
-        help="Resolved Graph site ID: hostname,siteCollectionGuid,webGuid. Overrides --site-url and --location.",
-    )
-    parser.add_argument(
-        "--resolve-site-url-with-graph",
-        action="store_true",
-        help="Advanced: resolve --site-url through Microsoft Graph. Requires Sites.Read.All admin consent.",
+        help="Resolved Graph site ID: hostname,siteCollectionGuid,webGuid. Overrides --site-url.",
     )
     parser.add_argument(
         "--out",
@@ -315,11 +275,6 @@ def parse_args(argv: list[str] | None = None, env_file: Path | None = Path(".env
         "--cache",
         default=env_value("ONENOTE_TOKEN_CACHE", ".msal_token_cache.json"),
         help="MSAL token cache path. Keep this private.",
-    )
-    parser.add_argument(
-        "--include-ids",
-        action="store_true",
-        help="Ask OneNote to include object IDs in exported HTML.",
     )
     parser.add_argument(
         "--include-image-links",
@@ -678,13 +633,12 @@ def convert_with_pandoc(
         cleaned_path.unlink(missing_ok=True)
 
 
-def page_content_url(location: str, page: dict[str, Any], include_ids: bool) -> tuple[str, dict[str, str] | None]:
+def page_content_url(location: str, page: dict[str, Any]) -> tuple[str, dict[str, str] | None]:
     content_url = page.get("contentUrl")
-    params = {"includeIDs": "true"} if include_ids else None
     if content_url:
-        return content_url, params
+        return content_url, None
     page_id = quote(page["id"], safe="")
-    return f"{normalize_location(location)}/onenote/pages/{page_id}/content", params
+    return f"{normalize_location(location)}/onenote/pages/{page_id}/content", None
 
 
 def export_page(
@@ -694,7 +648,6 @@ def export_page(
     page: dict[str, Any],
     output_dir: Path,
     formats: list[str],
-    include_ids: bool,
     include_image_links: bool = False,
 ) -> dict[str, str]:
     title = page.get("title") or "Untitled page"
@@ -703,7 +656,7 @@ def export_page(
     output_base = output_dir / f"{safe_name(title)}-{short_id}"
     html_path = output_path_for_format(output_base, "html")
 
-    url, params = page_content_url(location, page, include_ids)
+    url, params = page_content_url(location, page)
     html_path.write_bytes(client.bytes(url, params=params))
     convert_with_pandoc(html_path, output_base, formats, omit_images=not include_image_links)
 
@@ -722,7 +675,6 @@ def export_notebooks(
     output_dir: Path,
     notebook_filter: str | None,
     formats: list[str],
-    include_ids: bool,
     include_image_links: bool = False,
 ) -> int:
     all_notebooks = client.list_notebooks(location)
@@ -750,7 +702,7 @@ def export_notebooks(
         else:
             log_error(f"No notebooks found at {normalize_location(location)}.")
             log_recommendation(
-                "Try --location /groups/GROUP_ID or --location /sites/SITE_ID if this is a class notebook."
+                "If this is a Teams/Class Notebook, use --site-url with the notebook browser link."
             )
         return 0
 
@@ -779,7 +731,6 @@ def export_notebooks(
                     page=page,
                     output_dir=section_dir,
                     formats=formats,
-                    include_ids=include_ids,
                     include_image_links=include_image_links,
                 )
                 record["notebook"] = notebook_name
@@ -824,7 +775,7 @@ def main(
     client_factory: Callable[[str], GraphClient] = GraphClient,
 ) -> int:
     args = parse_args(argv)
-    if args.site_url and not args.site_id and not args.resolve_site_url_with_graph:
+    if args.site_url and not args.site_id:
         try:
             print_site_id_helper(args.site_url, list_notebooks=args.list, notebook=args.notebook)
             return 0
@@ -839,15 +790,10 @@ def main(
 
     try:
         formats = parse_formats(args.formats)
-        scopes = (
-            SITE_URL_SCOPES
-            if args.site_url and not args.site_id and args.resolve_site_url_with_graph
-            else DEFAULT_SCOPES
-        )
         token = token_provider(
             client_id=args.client_id,
             tenant_id=args.tenant_id,
-            scopes=scopes,
+            scopes=DEFAULT_SCOPES,
             cache_path=Path(args.cache),
         )
         client = client_factory(token)
@@ -855,18 +801,9 @@ def main(
             location = site_id_to_site_location(args.site_id)
             site_id_value = location[len("/sites/") :]
             export_command_base = f"python main.py --site-id {shell_double_quote(site_id_value)}"
-        elif args.site_url:
-            location = resolve_sharepoint_site_location(client, args.site_url)
-            export_command_base = (
-                f"python main.py --site-url {shell_double_quote(args.site_url)} "
-                "--resolve-site-url-with-graph"
-            )
         else:
-            location = normalize_location(args.location)
-            if location == "/me":
-                export_command_base = "python main.py"
-            else:
-                export_command_base = f"python main.py --location {shell_double_quote(location)}"
+            location = "/me"
+            export_command_base = "python main.py"
 
         if args.list:
             print_notebooks(client, location, export_command_base=export_command_base)
@@ -878,7 +815,6 @@ def main(
             output_dir=Path(args.out).expanduser().resolve(),
             notebook_filter=args.notebook,
             formats=formats,
-            include_ids=args.include_ids,
             include_image_links=args.include_image_links,
         )
         return 0

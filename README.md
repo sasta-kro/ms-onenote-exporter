@@ -13,7 +13,7 @@ to the signed-in Microsoft account.
 ## What It Does
 
 - Uses Microsoft device-code login in the terminal.
-- Lists notebooks available from `/me`, a group, or a SharePoint site.
+- Lists notebooks from your own OneNote area or a resolved SharePoint site.
 - Supports Teams/Class Notebook links through a low-permission site ID helper.
 - Walks notebooks, section groups, sections, and pages.
 - Downloads pages as local HTML files.
@@ -172,12 +172,6 @@ Export from a resolved SharePoint site:
 python main.py --site-id "yourtenant.sharepoint.com,siteCollectionGuid,webGuid" --notebook "Notebook Name"
 ```
 
-Advanced Graph resolver, only for tenants that allow `Sites.Read.All`:
-
-```bash
-python main.py --site-url "PASTE_LINK" --resolve-site-url-with-graph --list
-```
-
 ## Portable `.env` Setup
 
 The app reads `.env` automatically. CLI flags override `.env`, and real shell
@@ -199,8 +193,6 @@ Once `ONENOTE_SITE_ID` and `ONENOTE_NOTEBOOK` are set, you can usually run:
 ```bash
 python main.py
 ```
-
-or press PyCharm's run button on `main.py`.
 
 ## Requirements
 
@@ -238,24 +230,6 @@ The app expects:
 
 You do not need a client secret.
 
-The default `--site-url` helper does not need `Sites.Read.All`. The advanced
-`--resolve-site-url-with-graph` mode does need delegated `Sites.Read.All`, which
-many school/work tenants block behind admin approval.
-
-## PyCharm
-
-Use `main.py` as the run target.
-
-Make sure PyCharm uses this project's virtualenv:
-
-```text
-<project folder>/.venv/bin/python
-```
-
-If PyCharm runs something like `/Users/.../miniforge3/bin/python3`, it is using
-Miniforge/Conda base instead of this project venv. Dependencies installed into
-`.venv` will not be visible there.
-
 ## Token Cache
 
 The app stores Microsoft login tokens in:
@@ -280,8 +254,7 @@ If a Teams notebook is missing from `/me`, use the Teams/Class Notebook flow wit
 `--site-url`.
 
 If Microsoft says admin approval is required, your tenant may block user consent
-for the requested permission. The normal setup only needs `Notes.Read.All`; the
-advanced Graph site resolver also needs `Sites.Read.All`.
+for the requested permission. The normal setup only needs `Notes.Read.All`.
 
 If Microsoft returns `AADSTS50059`, set this in `.env`:
 

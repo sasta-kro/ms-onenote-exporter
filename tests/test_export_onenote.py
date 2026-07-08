@@ -55,20 +55,6 @@ class PaginationTests(unittest.TestCase):
 
 
 class SharePointUrlTests(unittest.TestCase):
-    def test_sharepoint_url_to_site_lookup_path_supports_sites_paths(self) -> None:
-        url = "https://school.sharepoint.com/sites/GDD542/Class%20Notebook/Forms/AllItems.aspx"
-
-        result = export_onenote.sharepoint_url_to_site_lookup_path(url)
-
-        self.assertEqual(result, "/sites/school.sharepoint.com:/sites/GDD542:")
-
-    def test_sharepoint_url_to_site_lookup_path_supports_teams_paths(self) -> None:
-        url = "https://school.sharepoint.com/teams/2026-GDD-542/Shared%20Documents"
-
-        result = export_onenote.sharepoint_url_to_site_lookup_path(url)
-
-        self.assertEqual(result, "/sites/school.sharepoint.com:/teams/2026-GDD-542:")
-
     def test_sharepoint_url_to_site_id_helper_urls_supports_doc_links(self) -> None:
         url = (
             "https://school.sharepoint.com/sites/Section_123/_layouts/15/Doc.aspx"
@@ -92,32 +78,6 @@ class SharePointUrlTests(unittest.TestCase):
         self.assertEqual(
             result.site_id_template,
             "school.sharepoint.com,SITE_GUID,WEB_GUID",
-        )
-
-    def test_sharepoint_url_to_site_lookup_path_rejects_non_site_urls(self) -> None:
-        with self.assertRaises(ValueError):
-            export_onenote.sharepoint_url_to_site_lookup_path(
-                "https://school.sharepoint.com/_layouts/15/start.aspx"
-            )
-
-    def test_resolve_sharepoint_site_location_uses_graph_site_id(self) -> None:
-        client = Mock()
-        client.json.return_value = {
-            "id": "school.sharepoint.com,site-guid,web-guid",
-            "displayName": "GDD 542",
-            "webUrl": "https://school.sharepoint.com/sites/GDD542",
-        }
-
-        with patch("builtins.print"):
-            result = export_onenote.resolve_sharepoint_site_location(
-                client,
-                "https://school.sharepoint.com/sites/GDD542/Class%20Notebook",
-            )
-
-        self.assertEqual(result, "/sites/school.sharepoint.com,site-guid,web-guid")
-        client.json.assert_called_once_with(
-            "/sites/school.sharepoint.com:/sites/GDD542:",
-            params={"$select": "id,displayName,webUrl"},
         )
 
     def test_site_id_to_site_location_accepts_graph_site_id(self) -> None:
@@ -195,7 +155,6 @@ class ExportNotebookTests(unittest.TestCase):
                 page=page,
                 output_dir=Path(tmpdir),
                 formats=[],
-                include_ids=False,
             )
 
             html_path = Path(record["html"])
@@ -289,7 +248,6 @@ class ExportNotebookTests(unittest.TestCase):
                 output_dir=output_dir,
                 notebook_filter="Course",
                 formats=[],
-                include_ids=False,
             )
 
             notebook_dir = output_dir / "Course Notes"
@@ -314,7 +272,6 @@ class ExportNotebookTests(unittest.TestCase):
                 output_dir=Path("out"),
                 notebook_filter="2026-1 GDD 542 Notebook",
                 formats=[],
-                include_ids=False,
             )
 
         self.assertEqual(count, 0)
@@ -386,7 +343,6 @@ class CliTests(unittest.TestCase):
         self.assertEqual(args.client_id, "abc")
         self.assertEqual(args.tenant_id, "organizations")
         self.assertEqual(args.formats, "")
-        self.assertEqual(args.location, "/me")
 
     def test_parse_args_accepts_site_url(self) -> None:
         args = export_onenote.parse_args(
@@ -422,13 +378,27 @@ class CliTests(unittest.TestCase):
 
         self.assertTrue(args.include_image_links)
 
+    def test_parse_args_rejects_removed_flags(self) -> None:
+        removed_flags = [
+            ["--location", "/groups/abc"],
+            ["--resolve-site-url-with-graph"],
+            ["--include-ids"],
+        ]
+
+        for flag_args in removed_flags:
+            with (
+                self.subTest(flag_args=flag_args),
+                patch("sys.stderr", io.StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                export_onenote.parse_args(["--client-id", "abc", *flag_args], env_file=None)
+
     def test_parse_args_treats_blank_env_values_as_missing(self) -> None:
         with patch.dict(
             os.environ,
             {
                 "ONENOTE_CLIENT_ID": "",
                 "ONENOTE_TENANT_ID": "",
-                "ONENOTE_LOCATION": "",
                 "ONENOTE_OUT": "",
                 "ONENOTE_FORMATS": "",
             },
@@ -438,7 +408,6 @@ class CliTests(unittest.TestCase):
 
         self.assertIsNone(args.client_id)
         self.assertEqual(args.tenant_id, "organizations")
-        self.assertEqual(args.location, "/me")
         self.assertEqual(args.out, "onenote_export")
         self.assertEqual(args.formats, "")
 
@@ -479,8 +448,8 @@ class CliTests(unittest.TestCase):
                 "[ERROR] Missing dependency 'msal' in the active Python interpreter.",
                 "[INFO] Active Python: /opt/miniforge3/bin/python3",
                 "[INFO] Project venv Python: /project/.venv/bin/python",
-                "[RECOMMENDATION] In PyCharm, set the Project Interpreter to: /project/.venv/bin/python",
-                "[RECOMMENDATION] Then rerun main.py. Your dependencies are installed in the project .venv, not Miniforge base.",
+                "[RECOMMENDATION] Run with the project venv Python: /project/.venv/bin/python main.py",
+                "[RECOMMENDATION] Or activate the venv before running commands: source .venv/bin/activate",
             ],
         )
 
@@ -601,45 +570,6 @@ class CliTests(unittest.TestCase):
                 'python main.py --site-id "school.sharepoint.com,SITE_GUID,WEB_GUID" --list',
                 "",
             ],
-        )
-
-    def test_main_uses_site_url_as_location_when_graph_resolution_requested(self) -> None:
-        token_provider = Mock(return_value="token")
-        client = Mock()
-        client.json.return_value = {"id": "school.sharepoint.com,site-guid,web-guid"}
-        client.list_notebooks.return_value = []
-
-        with (
-            patch.dict(os.environ, {}, clear=True),
-            patch.object(export_onenote, "load_dotenv", return_value=False),
-            patch("builtins.print"),
-        ):
-            exit_code = export_onenote.main(
-                [
-                    "--client-id",
-                    "abc",
-                    "--site-url",
-                    "https://school.sharepoint.com/teams/2026-GDD-542/Shared%20Documents",
-                    "--resolve-site-url-with-graph",
-                    "--list",
-                ],
-                token_provider=token_provider,
-                client_factory=lambda token: client,
-            )
-
-        self.assertEqual(exit_code, 0)
-        token_provider.assert_called_once_with(
-            client_id="abc",
-            tenant_id="organizations",
-            scopes=["Notes.Read.All", "Sites.Read.All"],
-            cache_path=Path(".msal_token_cache.json"),
-        )
-        client.json.assert_called_once_with(
-            "/sites/school.sharepoint.com:/teams/2026-GDD-542:",
-            params={"$select": "id,displayName,webUrl"},
-        )
-        client.list_notebooks.assert_called_once_with(
-            "/sites/school.sharepoint.com,site-guid,web-guid"
         )
 
     def test_main_uses_site_id_without_sites_read_scope(self) -> None:
