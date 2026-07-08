@@ -5,9 +5,8 @@
 MS OneNote Scraper exports Microsoft OneNote notebooks into local files.
 
 It is made for class notebooks and Teams notebooks that are already readable in
-a school or work Microsoft account. The common problem is simple: OneNote can be
-viewed in Teams, but there is no clean bulk download button. This tool fills
-that gap.
+a school or work Microsoft account. The problem is **shared OneNote books can be
+viewed in Teams, but there is no clean bulk download button**. This tool solves that problem.
 
 The main output is HTML. HTML keeps more of the original OneNote page structure
 than plain text. If Pandoc is installed, the same pages can also be converted to
@@ -49,8 +48,20 @@ then go to `Identity -> Applications -> App registrations`. Open the app
 registration for this exporter and copy `Application (client) ID` from the
 Overview page.
 
-If no app registration exists yet, create one first. Microsoft has the official
-guide here: [Register an application with the Microsoft identity platform](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app).
+If no app registration exists yet, create one first:
+
+1. Open [Microsoft Entra admin center](https://entra.microsoft.com/).
+2. Check that the selected tenant is the correct school or work organization.
+3. Go to `Identity -> Applications -> App registrations`.
+4. Press `New registration`.
+5. Set a clear name, for example `OneNote Downloader`.
+6. For supported account types, choose the single-tenant option for that
+   organization.
+7. Press `Register`.
+8. On the Overview page, copy `Application (client) ID`.
+9. Go to `Authentication`, enable public client/device-code flow, and save.
+10. Go to `API permissions`, add Microsoft Graph delegated permission
+    `Notes.Read.All`.
 
 The client ID is not a student ID, email address, tenant ID, or SharePoint ID.
 Do not paste `Directory (tenant) ID` into `ONENOTE_CLIENT_ID`.
@@ -342,11 +353,48 @@ Pandoc is only needed for Markdown, TXT, and RTF conversion.
 
 The Microsoft Entra app registration needs:
 
+- Supported account type: single tenant for the school or work organization.
 - Public client/device-code flow enabled.
 - Delegated Microsoft Graph permission: `Notes.Read.All`.
 - No client secret.
 
 The app uses device-code login. It does not need a password inside `.env`.
+
+One app registration can be reused by other people in the same organization.
+They do not need to create a new app registration. Share the same
+`ONENOTE_CLIENT_ID` value and keep `ONENOTE_TENANT_ID=organizations`.
+
+The app may still ask each account for permission on first login. If the
+organization blocks user consent, Microsoft shows an admin approval screen. In
+that case, an admin must approve the app or the export cannot continue with
+Microsoft Graph.
+
+App registration steps:
+
+1. Open [Microsoft Entra admin center](https://entra.microsoft.com/).
+2. Select the correct school or work tenant from the top menu if more than one
+   tenant exists.
+3. Go to `Identity -> Applications -> App registrations`.
+4. Press `New registration`.
+5. Enter a name, for example `OneNote Downloader`.
+6. Under supported account types, choose the single-tenant option for the
+   current organization.
+7. Leave redirect URI empty for this CLI tool.
+8. Press `Register`.
+9. Copy `Application (client) ID` from the Overview page.
+10. Open `Authentication`.
+11. Enable public client/device-code flow, then save.
+12. Open `API permissions`.
+13. Press `Add a permission`.
+14. Choose `Microsoft Graph`.
+15. Choose `Delegated permissions`.
+16. Search for `Notes.Read.All`.
+17. Add the permission.
+18. If Microsoft shows admin approval later, the tenant blocks normal user
+    consent for this permission.
+
+Official Microsoft guide:
+[Register an application with the Microsoft identity platform](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app)
 
 ## Token Cache
 
