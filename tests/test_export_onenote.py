@@ -11,6 +11,11 @@ from unittest.mock import Mock, patch
 import export_onenote
 
 
+class FakeInteractiveStdin(io.StringIO):
+    def isatty(self) -> bool:
+        return True
+
+
 class SafeNameTests(unittest.TestCase):
     def test_safe_name_replaces_filesystem_hostile_characters(self) -> None:
         value = 'Week 1: intro / "setup" <draft>? #100%'
@@ -99,6 +104,34 @@ class SharePointUrlTests(unittest.TestCase):
             export_onenote.site_id_to_site_location(
                 "school.sharepoint.com:/sites/GDD542:"
             )
+
+    def test_extract_sharepoint_guid_accepts_full_browser_xml_text(self) -> None:
+        pasted = """
+        This XML file does not appear to have any style information associated with it.
+        <d:Id xmlns:d="http://schemas.microsoft.com/ado/2007/08/dataservices"
+          m:type="Edm.Guid">80a26a44-cf5b-42b2-bf61-c3a021fa18c7</d:Id>
+        """
+
+        result = export_onenote.extract_sharepoint_guid(pasted, "SITE_GUID")
+
+        self.assertEqual(result, "80a26a44-cf5b-42b2-bf61-c3a021fa18c7")
+
+    def test_extract_sharepoint_guid_accepts_xml_only(self) -> None:
+        pasted = (
+            '<d:Id xmlns:d="http://schemas.microsoft.com/ado/2007/08/dataservices" '
+            'm:type="Edm.Guid">5dbbcfdd-641d-42ed-b89a-2cb2451897ef</d:Id>'
+        )
+
+        result = export_onenote.extract_sharepoint_guid(pasted, "WEB_GUID")
+
+        self.assertEqual(result, "5dbbcfdd-641d-42ed-b89a-2cb2451897ef")
+
+    def test_extract_sharepoint_guid_explains_missing_guid(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            r"\[ERROR\] I could not find WEB_GUID in that paste\.",
+        ):
+            export_onenote.extract_sharepoint_guid("not the XML page", "WEB_GUID")
 
 
 class SectionTraversalTests(unittest.TestCase):
@@ -528,7 +561,7 @@ class CliTests(unittest.TestCase):
             any("Course Notes" in str(call.args[0]) for call in print_mock.call_args_list)
         )
 
-    def test_main_prints_site_id_helper_for_site_url_by_default(self) -> None:
+    def test_main_prints_site_id_helper_for_site_url_when_not_interactive(self) -> None:
         token_provider = Mock(return_value="token")
         client = Mock()
 
@@ -543,7 +576,6 @@ class CliTests(unittest.TestCase):
                     "abc",
                     "--site-url",
                     "https://school.sharepoint.com/teams/2026-GDD-542/Shared%20Documents",
-                    "--list",
                 ],
                 token_provider=token_provider,
                 client_factory=lambda token: client,
@@ -570,6 +602,87 @@ class CliTests(unittest.TestCase):
                 'python main.py --site-id "school.sharepoint.com,SITE_GUID,WEB_GUID" --list',
                 "",
             ],
+        )
+
+    def test_main_prompts_for_site_url_guids_and_lists_notebooks_when_interactive(self) -> None:
+        token_provider = Mock(return_value="token")
+        client = Mock()
+        client.list_notebooks.return_value = [
+            {"displayName": "2026-1 BAD 542 Notebook", "isShared": False, "userRole": "Owner"}
+        ]
+        stdin = FakeInteractiveStdin(
+            "\n".join(
+                [
+                    "This XML file does not appear to have any style information associated with it.",
+                    '<d:Id m:type="Edm.Guid">80a26a44-cf5b-42b2-bf61-c3a021fa18c7</d:Id>',
+                    "",
+                    '<d:Id m:type="Edm.Guid">5dbbcfdd-641d-42ed-b89a-2cb2451897ef</d:Id>',
+                    "",
+                ]
+            )
+        )
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(export_onenote, "load_dotenv", return_value=False),
+            patch("builtins.print") as print_mock,
+            patch("sys.stdin", stdin),
+        ):
+            exit_code = export_onenote.main(
+                [
+                    "--client-id",
+                    "abc",
+                    "--site-url",
+                    "https://school.sharepoint.com/teams/2026-GDD-542/Shared%20Documents",
+                    "--list",
+                ],
+                token_provider=token_provider,
+                client_factory=lambda token: client,
+            )
+
+        self.assertEqual(exit_code, 0)
+        token_provider.assert_called_once_with(
+            client_id="abc",
+            tenant_id="organizations",
+            scopes=["Notes.Read.All"],
+            cache_path=Path(".msal_token_cache.json"),
+        )
+        client.list_notebooks.assert_called_once_with(
+            "/sites/school.sharepoint.com,80a26a44-cf5b-42b2-bf61-c3a021fa18c7,5dbbcfdd-641d-42ed-b89a-2cb2451897ef"
+        )
+        self.assertIn(
+            'python main.py --site-id "school.sharepoint.com,80a26a44-cf5b-42b2-bf61-c3a021fa18c7,5dbbcfdd-641d-42ed-b89a-2cb2451897ef" --list',
+            [call.args[0] for call in print_mock.call_args_list],
+        )
+
+    def test_main_returns_clear_error_when_interactive_site_url_paste_has_no_guid(self) -> None:
+        stdin = FakeInteractiveStdin("not the XML page\n\n")
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(export_onenote, "load_dotenv", return_value=False),
+            patch("builtins.print") as print_mock,
+            patch("sys.stdin", stdin),
+        ):
+            exit_code = export_onenote.main(
+                [
+                    "--client-id",
+                    "abc",
+                    "--site-url",
+                    "https://school.sharepoint.com/teams/2026-GDD-542/Shared%20Documents",
+                    "--list",
+                ],
+                token_provider=Mock(return_value="token"),
+            )
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn(
+            "[ERROR] I could not find SITE_GUID in that paste.",
+            [call.args[0] for call in print_mock.call_args_list],
+        )
+        self.assertIn(
+            "[RECOMMENDATION] Paste the full SharePoint XML page text, including the long value inside <d:Id>...</d:Id>.",
+            [call.args[0] for call in print_mock.call_args_list],
         )
 
     def test_main_uses_site_id_without_sites_read_scope(self) -> None:

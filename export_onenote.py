@@ -18,6 +18,9 @@ from urllib.parse import quote, unquote, urlparse
 
 GRAPH_ROOT = "https://graph.microsoft.com/v1.0"
 DEFAULT_SCOPES = ["Notes.Read.All"]
+GUID_PATTERN = re.compile(
+    r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
+)
 PANDOC_TARGETS = {
     "md": "gfm",
     "txt": "plain",
@@ -163,6 +166,75 @@ def shell_double_quote(value: str) -> str:
         .replace("\n", " ")
     )
     return f'"{escaped}"'
+
+
+def extract_sharepoint_guid(pasted_text: str, label: str) -> str:
+    match = GUID_PATTERN.search(pasted_text)
+    if match:
+        return match.group(0).lower()
+    raise ValueError(
+        f"[ERROR] I could not find {label} in that paste.\n"
+        "[RECOMMENDATION] Paste the full SharePoint XML page text, including the long value inside <d:Id>...</d:Id>."
+    )
+
+
+def read_pasted_guid(label: str, input_stream: Any = sys.stdin) -> str:
+    print("")
+    print(f"== Paste {label} page text ==")
+    print("Paste the whole XML/browser text here. Finish with an empty line.")
+    print(">")
+
+    lines: list[str] = []
+    while True:
+        line = input_stream.readline()
+        if line == "":
+            break
+        if line.strip() == "" and lines:
+            break
+        if line.strip() == "" and not lines:
+            continue
+        lines.append(line)
+
+    return extract_sharepoint_guid("".join(lines), label)
+
+
+def prompt_for_site_id_from_site_url(
+    site_url: str,
+    *,
+    input_stream: Any = sys.stdin,
+    list_notebooks: bool = False,
+    notebook: str | None = None,
+) -> str:
+    helper = sharepoint_url_to_site_id_helper_urls(site_url)
+    if notebook:
+        next_flag = f"--notebook {shell_double_quote(notebook)}"
+    elif list_notebooks:
+        next_flag = "--list"
+    else:
+        next_flag = "--list"
+
+    print("")
+    print("== Detected notebook storage site (for checking only) ==")
+    print("This is the Teams/SharePoint site that stores the notebook file. You usually do not need to open it.")
+    print(helper.site_root)
+    print("")
+    print("== Step 1 (SITE_GUID): open this in your signed-in browser ==")
+    print(helper.site_id_url)
+    site_guid = read_pasted_guid("SITE_GUID", input_stream)
+    print("")
+    print("== Step 2 (WEB_GUID): open this in your signed-in browser ==")
+    print(helper.web_id_url)
+    web_guid = read_pasted_guid("WEB_GUID", input_stream)
+
+    site_id = helper.site_id_template.replace("SITE_GUID", site_guid).replace("WEB_GUID", web_guid)
+    print("")
+    print("== Resolved site ID ==")
+    print(site_id)
+    print("")
+    print("== Reusable command ==")
+    print(f"python main.py --site-id {shell_double_quote(site_id)} {next_flag}")
+    print("")
+    return site_id
 
 
 def print_site_id_helper(site_url: str, *, list_notebooks: bool = False, notebook: str | None = None) -> None:
@@ -777,10 +849,25 @@ def main(
     args = parse_args(argv)
     if args.site_url and not args.site_id:
         try:
-            print_site_id_helper(args.site_url, list_notebooks=args.list, notebook=args.notebook)
-            return 0
+            if sys.stdin.isatty():
+                if not args.notebook:
+                    args.list = True
+                args.site_id = prompt_for_site_id_from_site_url(
+                    args.site_url,
+                    input_stream=sys.stdin,
+                    list_notebooks=args.list,
+                    notebook=args.notebook,
+                )
+            else:
+                print_site_id_helper(args.site_url, list_notebooks=args.list, notebook=args.notebook)
+                return 0
         except ValueError as exc:
-            print(str(exc), file=sys.stderr)
+            message = str(exc)
+            if message.startswith("[ERROR]"):
+                for line in message.splitlines():
+                    print(line)
+            else:
+                print(message, file=sys.stderr)
             return 1
 
     if not args.client_id:

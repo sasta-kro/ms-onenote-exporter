@@ -74,16 +74,30 @@ https://yourtenant.sharepoint.com/sites/Section_...
 == Step 1 (SITE_GUID): open this in your signed-in browser ==
 https://yourtenant.sharepoint.com/sites/Section_.../_api/site/id
 
+== Paste SITE_GUID page text ==
+Paste the whole XML/browser text here. Finish with an empty line.
+>
+
 == Step 2 (WEB_GUID): open this in your signed-in browser ==
 https://yourtenant.sharepoint.com/sites/Section_.../_api/web/id
 
-== Step 3: copy the two GUID values, then run ==
+== Paste WEB_GUID page text ==
+Paste the whole XML/browser text here. Finish with an empty line.
+>
+
+== Reusable command ==
 python main.py --site-id "yourtenant.sharepoint.com,SITE_GUID,WEB_GUID" --list
 ```
 
 Open the Step 1 and Step 2 links in the browser where you are already signed
-into your school account. Each page shows one GUID. Replace `SITE_GUID` and
-`WEB_GUID` in the printed command.
+into your school account. Each page shows one GUID. You can paste the whole
+page text, including the browser's "This XML file does not appear..." message,
+or just the `<d:Id>...</d:Id>` XML line. The app extracts the GUID for you.
+
+After both values are pasted, the app lists notebooks automatically. It also
+prints a reusable `--site-id` command so you can skip the paste step next time.
+If the app is running in a non-interactive shell, it prints the manual helper
+links and command instead of prompting.
 
 Example:
 
