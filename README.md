@@ -188,7 +188,8 @@ By default, `--site-url` does not contact Microsoft Graph. It prints two
 SharePoint `_api` URLs that you open in your normal signed-in browser:
 
 ```text
-== SharePoint site ==
+== Detected notebook storage site (for checking only) ==
+This is the Teams/SharePoint site that stores the notebook file. You usually do not need to open it.
 https://yourtenant.sharepoint.com/teams/TEAM-SITE-NAME
 
 == Step 1: open this in your signed-in browser ==

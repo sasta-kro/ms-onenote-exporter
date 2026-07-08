@@ -178,7 +178,8 @@ def print_site_id_helper(site_url: str, *, list_notebooks: bool = False, noteboo
         next_flag = "--list"
 
     print("")
-    print("== SharePoint site ==")
+    print("== Detected notebook storage site (for checking only) ==")
+    print("This is the Teams/SharePoint site that stores the notebook file. You usually do not need to open it.")
     print(helper.site_root)
     print("")
     print("== Step 1: open this in your signed-in browser ==")

@@ -502,7 +502,8 @@ class CliTests(unittest.TestCase):
             [call.args[0] for call in print_mock.call_args_list],
             [
                 "",
-                "== SharePoint site ==",
+                "== Detected notebook storage site (for checking only) ==",
+                "This is the Teams/SharePoint site that stores the notebook file. You usually do not need to open it.",
                 "https://school.sharepoint.com/teams/2026-GDD-542",
                 "",
                 "== Step 1: open this in your signed-in browser ==",
