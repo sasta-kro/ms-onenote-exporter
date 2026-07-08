@@ -65,6 +65,25 @@ class CliHeadingTests(unittest.TestCase):
             ),
         )
 
+    def test_read_pasted_guid_boxes_enter_twice_instruction(self) -> None:
+        stdin = io.StringIO(
+            '<d:Id m:type="Edm.Guid">80a26a44-cf5b-42b2-bf61-c3a021fa18c7</d:Id>\n\n'
+        )
+
+        with patch("builtins.print") as print_mock:
+            result = export_onenote.read_pasted_guid("SITE_GUID", stdin)
+
+        self.assertEqual(result, "80a26a44-cf5b-42b2-bf61-c3a021fa18c7")
+        self.assertIn(
+            export_onenote.ascii_box(
+                [
+                    "After pasting the XML text, press ENTER twice to continue.",
+                    "The second Enter submits the blank line.",
+                ]
+            ),
+            [call.args[0] for call in print_mock.call_args_list],
+        )
+
 
 class PaginationTests(unittest.TestCase):
     def test_paginate_yields_all_values_and_clears_params_after_first_page(self) -> None:
@@ -817,7 +836,7 @@ class CliTests(unittest.TestCase):
         client.list_notebooks.assert_called_once_with(
             "/sites/school.sharepoint.com,site-guid,web-guid"
         )
-        notebook_line = "1. 2026-1 CSX4107(541) Notebook | shared=False | role=Owner"
+        notebook_line = "1. 2026-1 CSX4107(541) Notebook"
         self.assertEqual(
             [call.args[0] for call in print_mock.call_args_list],
             [

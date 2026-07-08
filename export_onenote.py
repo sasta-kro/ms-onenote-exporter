@@ -217,7 +217,14 @@ def validate_distinct_sharepoint_guids(site_guid: str, web_guid: str) -> None:
 def read_pasted_guid(label: str, input_stream: Any = sys.stdin) -> str:
     print("")
     print(section_heading(f"Paste {label} page text"))
-    print("Paste the whole XML/browser text here. PRESS ENTER 2 TIMES TO CONTINUE")
+    print(
+        ascii_box(
+            [
+                "After pasting the XML text, press ENTER twice to continue.",
+                "The second Enter submits the blank line.",
+            ]
+        )
+    )
     print(">")
 
     lines: list[str] = []
@@ -875,9 +882,7 @@ def print_notebooks(client: GraphClient, location: str, export_command_base: str
     notebook_lines: list[str] = []
     for index, notebook in enumerate(notebooks, start=1):
         name = notebook.get("displayName") or "Untitled notebook"
-        shared = notebook.get("isShared")
-        role = notebook.get("userRole")
-        notebook_lines.append(f"{index}. {name} | shared={shared} | role={role}")
+        notebook_lines.append(f"{index}. {name}")
     print(section_heading("Available notebooks"))
     print(ascii_box(notebook_lines))
     if export_command_base:

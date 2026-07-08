@@ -78,7 +78,10 @@ This is the Teams/SharePoint site that stores the notebook file. You usually do 
     https://yourtenant.sharepoint.com/sites/Section_.../_api/site/id
 
 >>>>> Paste SITE_GUID page text
-Paste the whole XML/browser text here. PRESS ENTER 2 TIMES TO CONTINUE
++------------------------------------------------------------+
+| After pasting the XML text, press ENTER twice to continue. |
+| The second Enter submits the blank line.                   |
++------------------------------------------------------------+
 >
 
 >>>>> Step 2 (WEB_GUID): open this in your signed-in browser
@@ -86,12 +89,20 @@ Paste the whole XML/browser text here. PRESS ENTER 2 TIMES TO CONTINUE
     https://yourtenant.sharepoint.com/sites/Section_.../_api/web/id
 
 >>>>> Paste WEB_GUID page text
-Paste the whole XML/browser text here. PRESS ENTER 2 TIMES TO CONTINUE
++------------------------------------------------------------+
+| After pasting the XML text, press ENTER twice to continue. |
+| The second Enter submits the blank line.                   |
++------------------------------------------------------------+
 >
 
 >>>>> Reusable command
 
     python main.py --site-id "yourtenant.sharepoint.com,SITE_GUID,WEB_GUID" --list
+
+>>>>> Available notebooks
++----------------------------+
+| 1. 2026-1 BAD 542 Notebook |
++----------------------------+
 ```
 
 Open the Step 1 and Step 2 links in the browser where you are already signed
