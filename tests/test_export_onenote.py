@@ -652,11 +652,11 @@ class CliTests(unittest.TestCase):
                 "",
                 export_onenote.section_heading("Step 1 (SITE_GUID): open this in your signed-in browser"),
                 "",
-                export_onenote.copy_block("https://school.sharepoint.com/teams/2026-GDD-542/_api/site/id"),
+                export_onenote.ascii_box(["https://school.sharepoint.com/teams/2026-GDD-542/_api/site/id"]),
                 "",
                 export_onenote.section_heading("Step 2 (WEB_GUID): open this in your signed-in browser"),
                 "",
-                export_onenote.copy_block("https://school.sharepoint.com/teams/2026-GDD-542/_api/web/id"),
+                export_onenote.ascii_box(["https://school.sharepoint.com/teams/2026-GDD-542/_api/web/id"]),
                 "",
                 export_onenote.section_heading("Step 3: copy the two GUID values, then run"),
                 "",
@@ -710,6 +710,14 @@ class CliTests(unittest.TestCase):
         )
         client.list_notebooks.assert_called_once_with(
             "/sites/school.sharepoint.com,80a26a44-cf5b-42b2-bf61-c3a021fa18c7,5dbbcfdd-641d-42ed-b89a-2cb2451897ef"
+        )
+        self.assertIn(
+            export_onenote.ascii_box(["https://school.sharepoint.com/teams/2026-GDD-542/_api/site/id"]),
+            [call.args[0] for call in print_mock.call_args_list],
+        )
+        self.assertIn(
+            export_onenote.ascii_box(["https://school.sharepoint.com/teams/2026-GDD-542/_api/web/id"]),
+            [call.args[0] for call in print_mock.call_args_list],
         )
         resolved_site_id = (
             "school.sharepoint.com,"

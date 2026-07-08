@@ -75,7 +75,9 @@ This is the Teams/SharePoint site that stores the notebook file. You usually do 
 
 >>>>> Step 1 (SITE_GUID): open this in your signed-in browser
 
-    https://yourtenant.sharepoint.com/sites/Section_.../_api/site/id
+╭─────────────────────────────────────────────────────────────────╮
+│ https://yourtenant.sharepoint.com/sites/Section_.../_api/site/id │
+╰─────────────────────────────────────────────────────────────────╯
 
 >>>>> Paste SITE_GUID page text
 ╭────────────────────────────────────────────────────────────╮
@@ -85,7 +87,9 @@ This is the Teams/SharePoint site that stores the notebook file. You usually do 
 
 >>>>> Step 2 (WEB_GUID): open this in your signed-in browser
 
-    https://yourtenant.sharepoint.com/sites/Section_.../_api/web/id
+╭────────────────────────────────────────────────────────────────╮
+│ https://yourtenant.sharepoint.com/sites/Section_.../_api/web/id │
+╰────────────────────────────────────────────────────────────────╯
 
 >>>>> Paste WEB_GUID page text
 ╭────────────────────────────────────────────────────────────╮
