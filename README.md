@@ -132,25 +132,6 @@ or only the XML line:
 After both GUID values are pasted, the app lists notebooks in that SharePoint
 site. If only one notebook exists, it downloads that notebook automatically.
 
-To export Markdown instead of only HTML, put `--formats md` anywhere in the
-command:
-
-```bash
-python main.py --formats md --site-url "PASTE_TEAMS_OR_ONENOTE_BROWSER_LINK"
-```
-
-For TXT or RTF:
-
-```bash
-python main.py --formats txt --site-url "PASTE_TEAMS_OR_ONENOTE_BROWSER_LINK"
-python main.py --formats rtf --site-url "PASTE_TEAMS_OR_ONENOTE_BROWSER_LINK"
-```
-
-To list notebooks without downloading, add `--list`:
-
-```bash
-python main.py --site-url "PASTE_TEAMS_OR_ONENOTE_BROWSER_LINK" --list
-```
 
 ## Output Folder
 
