@@ -31,7 +31,10 @@ python -m pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edit `.env` and set your Microsoft Entra application/client ID:
+Edit `.env` and set your Microsoft Entra application/client ID. To find it,
+open [Microsoft Entra admin center](https://entra.microsoft.com/), go to
+`Identity -> Applications -> App registrations`, open your app, then copy
+`Application (client) ID` from the Overview page.
 
 ```text
 ONENOTE_CLIENT_ID=paste-your-application-client-id-here
@@ -260,12 +263,16 @@ ONENOTE_TENANT_ID=organizations
 
 `ONENOTE_CLIENT_ID` comes from your Microsoft Entra app registration:
 
-1. Open the Microsoft Entra admin center or Azure portal.
-2. Go to `App registrations`.
+1. Open [Microsoft Entra admin center](https://entra.microsoft.com/).
+2. In the left sidebar, go to `Identity -> Applications -> App registrations`.
 3. Open the app registration you created for this exporter.
-4. Copy `Application (client) ID` from the app's Overview page.
+4. If you have not created an app yet, click `New registration` first. Microsoft
+   has the full setup guide here: [Register an application with the Microsoft identity platform](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app).
+5. On the app's Overview page, copy `Application (client) ID`.
+6. Paste that GUID as `ONENOTE_CLIENT_ID=...` in `.env`.
 
-This is not your student ID, email address, tenant ID, or SharePoint ID.
+This is not your student ID, email address, tenant ID, or SharePoint ID. Do not
+paste `Directory (tenant) ID` into `ONENOTE_CLIENT_ID`.
 
 Keep `ONENOTE_TENANT_ID=organizations` for normal uni/work Teams notebooks.
 That tells Microsoft login to use work/school accounts. If you intentionally
