@@ -36,17 +36,12 @@ python -m pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Open `.env` and set the Microsoft Entra application/client ID:
+Open `.env` and check the Microsoft Entra application/client ID:
 
 ```text
-ONENOTE_CLIENT_ID=paste-application-client-id-here
+ONENOTE_CLIENT_ID=43e0fa96-05a2-4479-ae9c-7d88e22cf6d7
 ONENOTE_TENANT_ID=organizations
 ```
-
-To find the client ID, open [Microsoft Entra admin center](https://entra.microsoft.com/),
-then go to `Identity -> Applications -> App registrations`. Open the app
-registration for this exporter and copy `Application (client) ID` from the
-Overview page.
 
 If someone in the same organization already registered the app, a new app
 registration is not needed. Use the existing `ONENOTE_CLIENT_ID` value.
@@ -253,7 +248,7 @@ environment variables override `.env` too.
 Common `.env` values:
 
 ```text
-ONENOTE_CLIENT_ID=paste-application-client-id-here
+ONENOTE_CLIENT_ID=43e0fa96-05a2-4479-ae9c-7d88e22cf6d7
 ONENOTE_TENANT_ID=organizations
 ONENOTE_SITE_ID=school.sharepoint.com,siteCollectionGuid,webGuid
 ONENOTE_OUT=onenote_export
