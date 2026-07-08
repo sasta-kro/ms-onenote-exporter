@@ -48,20 +48,11 @@ then go to `Identity -> Applications -> App registrations`. Open the app
 registration for this exporter and copy `Application (client) ID` from the
 Overview page.
 
-If no app registration exists yet, create one first:
+If someone in the same organization already registered the app, a new app
+registration is not needed. Use the existing `ONENOTE_CLIENT_ID` value.
 
-1. Open [Microsoft Entra admin center](https://entra.microsoft.com/).
-2. Check that the selected tenant is the correct school or work organization.
-3. Go to `Identity -> Applications -> App registrations`.
-4. Press `New registration`.
-5. Set a clear name, for example `OneNote Downloader`.
-6. For supported account types, choose the single-tenant option for that
-   organization.
-7. Press `Register`.
-8. On the Overview page, copy `Application (client) ID`.
-9. Go to `Authentication`, enable public client/device-code flow, and save.
-10. Go to `API permissions`, add Microsoft Graph delegated permission
-    `Notes.Read.All`.
+If no app registration exists yet, follow the detailed setup in
+[Microsoft App Setup](#microsoft-app-setup).
 
 The client ID is not a student ID, email address, tenant ID, or SharePoint ID.
 Do not paste `Directory (tenant) ID` into `ONENOTE_CLIENT_ID`.
@@ -132,6 +123,35 @@ or only the XML line:
 After both GUID values are pasted, the app lists notebooks in that SharePoint
 site. If only one notebook exists, it downloads that notebook automatically.
 
+## How It Works
+
+The app uses Microsoft device-code login. The terminal prints a Microsoft login
+URL and a short code. The browser handles the real Microsoft sign-in. The app
+receives an access token after login succeeds.
+
+For normal OneNote notebooks, the app asks Microsoft Graph for notebooks under
+the signed-in account.
+
+For Teams/Class Notebook links, the notebook usually lives in a SharePoint site.
+The pasted Teams browser link contains the SharePoint site address, but
+Microsoft Graph needs a resolved site ID. The app helps collect two SharePoint
+GUID values from `_api/site/id` and `_api/web/id`, then builds the Graph site
+ID from those values.
+
+After the notebook is found, the app walks through notebooks, section groups,
+sections, and pages. Each page is downloaded as HTML. Optional formats are made
+from cleaned HTML using Pandoc.
+
+## Tech Used
+
+- Python 3.
+- `msal` for Microsoft device-code login and token caching.
+- `requests` for Microsoft Graph and SharePoint-related HTTP calls.
+- Microsoft Graph OneNote APIs for notebook, section, and page export.
+- SharePoint `_api/site/id` and `_api/web/id` helper endpoints for Teams
+  notebook site resolution.
+- Pandoc for optional Markdown, TXT, and RTF conversion.
+- `unittest` for the local test suite.
 
 ## Output Folder
 
