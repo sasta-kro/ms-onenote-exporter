@@ -151,10 +151,11 @@ def parse_formats(value: str) -> list[str]:
     if not value.strip():
         return []
     formats = [item.strip().lower() for item in value.split(",") if item.strip()]
+    formats = [fmt for fmt in formats if fmt != "html"]
     unsupported = sorted(set(formats) - set(PANDOC_TARGETS))
     if unsupported:
         raise argparse.ArgumentTypeError(
-            f"unsupported format(s): {', '.join(unsupported)}. Use md, txt, rtf, or ''."
+            f"unsupported format(s): {', '.join(unsupported)}. Use html, md, txt, rtf, or ''."
         )
     return formats
 
@@ -396,7 +397,7 @@ def parse_args(argv: list[str] | None = None, env_file: Path | None = Path(".env
     parser.add_argument(
         "--formats",
         default=env_value("ONENOTE_FORMATS", ""),
-        help="Optional comma-separated conversions: md,txt,rtf. Empty means HTML only.",
+        help="Optional comma-separated formats: html,md,txt,rtf. HTML is always exported.",
     )
     parser.add_argument("--list", action="store_true", help="List notebooks and exit.")
     parser.add_argument(
@@ -881,9 +882,12 @@ def export_notebooks(
 
 def print_optional_format_commands(export_command_base: str, notebook_name: str) -> None:
     print("")
-    print(section_heading("Optional Markdown/RTF commands"))
+    print(section_heading("If you want to export to Markdown, TXT, or RTF format instead:"))
     print("")
     print(copy_block(f"{export_command_base} --notebook {shell_double_quote(notebook_name)} --formats md"))
+    print("")
+    print(copy_block(f"{export_command_base} --notebook {shell_double_quote(notebook_name)} --formats txt"))
+    print("")
     print(copy_block(f"{export_command_base} --notebook {shell_double_quote(notebook_name)} --formats rtf"))
 
 
@@ -972,14 +976,14 @@ def main(
             if len(notebooks) == 1:
                 notebook_name = notebooks[0].get("displayName") or "Untitled notebook"
                 print("")
-                print(section_heading("Auto-downloading the only notebook as HTML"))
+                print(section_heading("Auto-downloading the only notebook"))
                 print(ascii_box([notebook_name]))
                 export_notebooks(
                     client,
                     location=location,
                     output_dir=Path(args.out).expanduser().resolve(),
                     notebook_filter=notebook_name,
-                    formats=[],
+                    formats=formats,
                     include_image_links=args.include_image_links,
                 )
                 print_optional_format_commands(export_command_base, notebook_name)

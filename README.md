@@ -3,9 +3,9 @@
 Export Microsoft OneNote notebooks that your work/school account can already
 read into local files.
 
-The app saves every page as `.html`. HTML is the format Microsoft Graph returns
-and usually keeps more OneNote structure than plain text. If Pandoc is installed,
-the app can also create `.md`, `.txt`, or `.rtf` copies.
+The app always saves every page as `.html`. HTML is the format Microsoft Graph
+returns and usually keeps more OneNote structure than plain text. If Pandoc is
+installed, the app can also create `.md`, `.txt`, or `.rtf` copies.
 
 This is not an organization-wide backup tool. It only exports notebooks visible
 to the signed-in Microsoft account.
@@ -106,14 +106,15 @@ This is the Teams/SharePoint site that stores the notebook file. You usually do 
 │ 1. 2026-1 BAD 542 Notebook │
 ╰────────────────────────────╯
 
->>>>> Auto-downloading the only notebook as HTML
+>>>>> Auto-downloading the only notebook
 ╭─────────────────────────╮
 │ 2026-1 BAD 542 Notebook │
 ╰─────────────────────────╯
 
->>>>> Optional Markdown/RTF commands
+>>>>> If you want to export to Markdown, TXT, or RTF format instead:
 
     python main.py --site-id "yourtenant.sharepoint.com,SITE_GUID,WEB_GUID" --notebook "2026-1 BAD 542 Notebook" --formats md
+    python main.py --site-id "yourtenant.sharepoint.com,SITE_GUID,WEB_GUID" --notebook "2026-1 BAD 542 Notebook" --formats txt
     python main.py --site-id "yourtenant.sharepoint.com,SITE_GUID,WEB_GUID" --notebook "2026-1 BAD 542 Notebook" --formats rtf
 ```
 
@@ -123,8 +124,13 @@ page text, including the browser's "This XML file does not appear..." message,
 or just the `<d:Id>...</d:Id>` XML line. The app extracts the GUID for you.
 
 After both values are pasted, the app lists notebooks automatically. If exactly
-one notebook is available, it downloads that notebook as HTML immediately. It
-also prints optional Markdown and RTF commands for later.
+one notebook is available, it downloads that notebook immediately. HTML is
+always exported; add `--formats md`, `--formats txt`, or `--formats rtf` if you
+also want converted copies. Flag order does not matter, so this works:
+
+```bash
+python main.py --formats md --site-url "PASTE_TEAMS_OR_ONENOTE_BROWSER_LINK"
+```
 
 If you only want to list notebooks without downloading, add `--list`:
 
@@ -200,6 +206,13 @@ Export HTML plus Markdown and TXT:
 
 ```bash
 python main.py --formats md,txt --notebook "2026-1 BAD 542 Notebook"
+```
+
+`--formats html` is accepted too, but it is a no-op because HTML is already the
+default output:
+
+```bash
+python main.py --formats html --site-url "PASTE_TEAMS_OR_ONENOTE_BROWSER_LINK"
 ```
 
 Converted `.md`, `.txt`, and `.rtf` files are cleaned before Pandoc runs:
