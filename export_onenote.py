@@ -189,10 +189,19 @@ def extract_sharepoint_guid(pasted_text: str, label: str) -> str:
     )
 
 
+def validate_distinct_sharepoint_guids(site_guid: str, web_guid: str) -> None:
+    if site_guid.strip().lower() == web_guid.strip().lower():
+        raise ValueError(
+            "[ERROR] SITE_GUID and WEB_GUID are identical.\n"
+            "[RECOMMENDATION] You probably pasted the Step 1 SITE_GUID page twice. "
+            "Open the Step 2 WEB_GUID link and paste that page instead."
+        )
+
+
 def read_pasted_guid(label: str, input_stream: Any = sys.stdin) -> str:
     print("")
     print(section_heading(f"Paste {label} page text"))
-    print("Paste the whole XML/browser text here. Finish with an empty line.")
+    print("Paste the whole XML/browser text here. Finish with an empty line (press Enter 2 times).")
     print(">")
 
     lines: list[str] = []
@@ -236,6 +245,7 @@ def prompt_for_site_id_from_site_url(
     print(section_heading("Step 2 (WEB_GUID): open this in your signed-in browser"))
     print(helper.web_id_url)
     web_guid = read_pasted_guid("WEB_GUID", input_stream)
+    validate_distinct_sharepoint_guids(site_guid, web_guid)
 
     site_id = helper.site_id_template.replace("SITE_GUID", site_guid).replace("WEB_GUID", web_guid)
     print("")
@@ -288,6 +298,7 @@ def site_id_to_site_location(site_id: str) -> str:
             "--site-id expects a resolved Graph site ID like "
             "hostname,siteCollectionGuid,webGuid."
         )
+    validate_distinct_sharepoint_guids(parts[1], parts[2])
     return f"/sites/{value}"
 
 

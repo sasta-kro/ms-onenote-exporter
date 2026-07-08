@@ -119,6 +119,12 @@ class SharePointUrlTests(unittest.TestCase):
                 "school.sharepoint.com:/sites/GDD542:"
             )
 
+    def test_site_id_to_site_location_rejects_duplicate_site_and_web_guids(self) -> None:
+        with self.assertRaisesRegex(ValueError, "SITE_GUID and WEB_GUID are identical"):
+            export_onenote.site_id_to_site_location(
+                "school.sharepoint.com,80a26a44-cf5b-42b2-bf61-c3a021fa18c7,80a26a44-cf5b-42b2-bf61-c3a021fa18c7"
+            )
+
     def test_extract_sharepoint_guid_accepts_full_browser_xml_text(self) -> None:
         pasted = """
         This XML file does not appear to have any style information associated with it.
@@ -696,6 +702,49 @@ class CliTests(unittest.TestCase):
         )
         self.assertIn(
             "[RECOMMENDATION] Paste the full SharePoint XML page text, including the long value inside <d:Id>...</d:Id>.",
+            [call.args[0] for call in print_mock.call_args_list],
+        )
+
+    def test_main_rejects_duplicate_interactive_site_and_web_guid_before_login(self) -> None:
+        token_provider = Mock(return_value="token")
+        same_guid = "80a26a44-cf5b-42b2-bf61-c3a021fa18c7"
+        stdin = FakeInteractiveStdin(
+            "\n".join(
+                [
+                    f'<d:Id m:type="Edm.Guid">{same_guid}</d:Id>',
+                    "",
+                    f'<d:Id m:type="Edm.Guid">{same_guid}</d:Id>',
+                    "",
+                ]
+            )
+        )
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(export_onenote, "load_dotenv", return_value=False),
+            patch("builtins.print") as print_mock,
+            patch("sys.stdin", stdin),
+        ):
+            exit_code = export_onenote.main(
+                [
+                    "--client-id",
+                    "abc",
+                    "--site-url",
+                    "https://school.sharepoint.com/teams/2026-GDD-542/Shared%20Documents",
+                    "--list",
+                ],
+                token_provider=token_provider,
+                client_factory=Mock(),
+            )
+
+        self.assertEqual(exit_code, 1)
+        token_provider.assert_not_called()
+        self.assertIn(
+            "[ERROR] SITE_GUID and WEB_GUID are identical.",
+            [call.args[0] for call in print_mock.call_args_list],
+        )
+        self.assertIn(
+            "[RECOMMENDATION] You probably pasted the Step 1 SITE_GUID page twice. Open the Step 2 WEB_GUID link and paste that page instead.",
             [call.args[0] for call in print_mock.call_args_list],
         )
 
