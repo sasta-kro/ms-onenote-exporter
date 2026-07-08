@@ -185,7 +185,7 @@ def print_site_id_helper(site_url: str, *, list_notebooks: bool = False, noteboo
     print("== Step 1 (SITE_GUID): open this in your signed-in browser ==")
     print(helper.site_id_url)
     print("")
-    print("== Step 2(WEB_GUID: open this in your signed-in browser ==")
+    print("== Step 2 (WEB_GUID): open this in your signed-in browser ==")
     print(helper.web_id_url)
     print("")
     print("== Step 3: copy the two GUID values, then run ==")

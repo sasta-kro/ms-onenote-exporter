@@ -1,276 +1,256 @@
 # MS OneNote Scraper
 
-Export OneNote notebooks that your Microsoft work/school account can already
-access into local files.
+Export Microsoft OneNote notebooks that your work/school account can already
+read into local files.
 
-The exporter always saves each page as `.html`. HTML is the source format
-returned by Microsoft Graph and usually preserves more OneNote structure than
-plain text. Optionally, you can also convert the HTML pages to Markdown, TXT, or
-RTF with Pandoc.
+The app saves every page as `.html`. HTML is the format Microsoft Graph returns
+and usually keeps more OneNote structure than plain text. If Pandoc is installed,
+the app can also create `.md`, `.txt`, or `.rtf` copies.
 
-## What This Does
+This is not an organization-wide backup tool. It only exports notebooks visible
+to the signed-in Microsoft account.
 
-- Signs in with your Microsoft account using a device-code flow.
-- Lists notebooks visible through Microsoft Graph OneNote endpoints.
-- Walks notebooks, sections, nested section groups, and pages.
-- Downloads page content as local `.html` files.
-- Writes a `manifest.json` with exported page metadata.
-- Optionally runs Pandoc to create `.md`, `.txt`, or `.rtf` copies.
+## What It Does
 
-This is not an org-wide backup tool. It only exports notebooks that the signed-in
-user can already access.
+- Uses Microsoft device-code login in the terminal.
+- Lists notebooks available from `/me`, a group, or a SharePoint site.
+- Supports Teams/Class Notebook links through a low-permission site ID helper.
+- Walks notebooks, section groups, sections, and pages.
+- Downloads pages as local HTML files.
+- Writes one `manifest.json` inside each exported notebook folder.
+- Optionally converts HTML pages with Pandoc.
 
-## Requirements
-
-Python dependencies are documented in `requirements.txt`:
-
-```bash
-python -m pip install -r requirements.txt
-```
-
-Those packages are:
-
-- `msal`: Microsoft Authentication Library. It handles the browser/device-code
-  login and gets a Microsoft Graph access token. The script never sees your
-  password.
-- `requests`: HTTP client used to call Microsoft Graph with that token.
-
-Optional system dependency:
-
-```bash
-brew install pandoc
-```
-
-`pandoc` is only needed if you pass `--formats md`, `--formats txt`,
-`--formats rtf`, or a comma-separated combination like `--formats md,txt`.
-If you only want `.html`, you do not need Pandoc and you do not need Homebrew.
-
-Homebrew is mentioned because it is the common macOS way to install command-line
-tools like Pandoc. You can inspect it first with:
-
-```bash
-brew info pandoc
-brew home pandoc
-```
-
-## Microsoft App Setup
-
-You said the web/auth side is already done. For reference, this script expects:
-
-- A Microsoft Entra app registration.
-- Public client/device-code flow enabled.
-- Microsoft Graph delegated permission: `Notes.Read.All`.
-- Optional advanced mode only: `--resolve-site-url-with-graph` also needs
-  delegated permission `Sites.Read.All`, which many school/work tenants block
-  behind admin approval.
-- The Application/client ID from the app registration.
-
-You do not need a client secret for this script.
-
-## Setup
+## Quick Start
 
 From this project directory:
 
 ```bash
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-```
-
-Create your local `.env` file:
-
-```bash
-cp .env.example .env
-```
-
-Then edit `.env` and paste your Entra Application/client ID:
-
-```text
-ONENOTE_CLIENT_ID=paste-your-application-client-id-here
-ONENOTE_TENANT_ID=organizations
-```
-
-`organizations` is a good default for work/school Microsoft accounts. You can
-replace it with your tenant ID or tenant domain if needed.
-
-The script loads `.env` automatically before reading CLI defaults. Real shell
-environment variables still win over `.env` values, and explicit CLI arguments
-win over both.
-
-## PyCharm Run Button
-
-Use [main.py](main.py) as the PyCharm run target.
-
-Why this exists: PyCharm's run button does not automatically inherit `export ...`
-commands you typed in a separate terminal. The project therefore supports a
-local `.env` file and a small `main.py` entrypoint so the run button can work
-without custom shell setup.
-
-Make sure PyCharm uses this project's virtualenv, not Miniforge/Conda base:
-
-```text
-PyCharm > Settings > Project > Python Interpreter
-```
-
-Select:
-
-```text
-<project folder>/.venv/bin/python
-```
-
-If PyCharm runs something like `/Users/.../miniforge3/bin/python3`, it is using
-the wrong interpreter. Dependencies installed into `.venv` will not be visible
-there.
-
-For a portable setup on another machine:
-
-```bash
-git pull
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Then fill in `.env` and run `main.py` from PyCharm or the terminal.
+Edit `.env` and set your Microsoft Entra application/client ID:
 
-## Usage
+```text
+ONENOTE_CLIENT_ID=paste-your-application-client-id-here
+ONENOTE_TENANT_ID=organizations
+```
 
-List notebooks first:
+Then try listing notebooks from your own OneNote area:
 
 ```bash
 python main.py --list
 ```
 
-On first run, the terminal will print a Microsoft device-login URL and a
-`[DEVICE CODE]` line. Open the URL, enter the code from the terminal into the
-Microsoft page, and sign in with the Microsoft account that can access the
-OneNote notebooks. The code is not in Teams or OneNote.
+On first run, Microsoft will ask you to open a device-login URL and enter the
+code printed in the terminal. The code comes from this app's terminal output,
+not from Teams or OneNote.
 
-Export everything visible to your account as HTML:
+## Teams/Class Notebook Flow
 
-```bash
-python main.py --out ~/OneNoteExport
-```
+Most class notebooks in Teams are stored in SharePoint. `/me` may show no
+notebooks even when you can see the notebook in Teams.
 
-Export only notebooks whose name contains some text:
+Use this flow:
 
-```bash
-python main.py --out ~/OneNoteExport --notebook "CSX4107"
-```
-
-Export HTML and also convert to Markdown and TXT:
+1. In Teams, open the class notebook.
+2. Use the globe/open-in-browser button.
+3. Copy the browser URL.
+4. Run:
 
 ```bash
-python main.py --out ~/OneNoteExport --formats md,txt
+python main.py --site-url "PASTE_TEAMS_OR_ONENOTE_BROWSER_LINK"
 ```
 
-Export from another Microsoft Graph OneNote root:
-
-```bash
-python main.py --location "/groups/GROUP_ID" --out ~/OneNoteExport
-python main.py --location "/sites/SITE_ID" --out ~/OneNoteExport
-```
-
-For a Teams Class Notebook, `/me` may show zero notebooks even though you can see
-the notebook in Teams. Start by pasting the Teams/OneNote browser URL:
-
-```bash
-python main.py --site-url "https://yourtenant.sharepoint.com/teams/TEAM-SITE-NAME/Shared%20Documents" --list
-python main.py --site-url "https://yourtenant.sharepoint.com/teams/TEAM-SITE-NAME/Shared%20Documents" --notebook "2026-1 GDD 542 Notebook"
-```
-
-In Teams, open the class notebook and use the globe/open-in-browser button if it
-is available. Copy the browser URL. The script only needs the SharePoint site
-part of the URL, such as `/teams/...` or `/sites/...`; extra path pieces are
-ignored.
-
-By default, `--site-url` does not contact Microsoft Graph. It prints two
-SharePoint `_api` URLs that you open in your normal signed-in browser:
+The app prints something like this:
 
 ```text
 == Detected notebook storage site (for checking only) ==
 This is the Teams/SharePoint site that stores the notebook file. You usually do not need to open it.
-https://yourtenant.sharepoint.com/teams/TEAM-SITE-NAME
+https://yourtenant.sharepoint.com/sites/Section_...
 
-== Step 1: open this in your signed-in browser ==
-https://yourtenant.sharepoint.com/teams/TEAM-SITE-NAME/_api/site/id
+== Step 1 (SITE_GUID): open this in your signed-in browser ==
+https://yourtenant.sharepoint.com/sites/Section_.../_api/site/id
 
-== Step 2: open this in your signed-in browser ==
-https://yourtenant.sharepoint.com/teams/TEAM-SITE-NAME/_api/web/id
+== Step 2 (WEB_GUID): open this in your signed-in browser ==
+https://yourtenant.sharepoint.com/sites/Section_.../_api/web/id
 
 == Step 3: copy the two GUID values, then run ==
 python main.py --site-id "yourtenant.sharepoint.com,SITE_GUID,WEB_GUID" --list
 ```
 
-Each page shows one GUID. Copy the GUID text from each page:
+Open the Step 1 and Step 2 links in the browser where you are already signed
+into your school account. Each page shows one GUID. Replace `SITE_GUID` and
+`WEB_GUID` in the printed command.
 
-```text
-https://yourtenant.sharepoint.com/sites/SITE_NAME/_api/site/id
-https://yourtenant.sharepoint.com/sites/SITE_NAME/_api/web/id
-```
-
-For a `/teams/...` site, use `/teams/SITE_NAME/_api/...` instead.
-
-Then combine them like this:
-
-```text
-yourtenant.sharepoint.com,siteCollectionGuid,webGuid
-```
-
-Then use that resolved site ID for listing and exporting:
+Example:
 
 ```bash
-python main.py --site-id "yourtenant.sharepoint.com,siteCollectionGuid,webGuid" --list
-python main.py --site-id "yourtenant.sharepoint.com,siteCollectionGuid,webGuid" --notebook "2026-1 GDD 542 Notebook"
+python main.py --site-id "assumptionuniversity.sharepoint.com,80a26a44-cf5b-42b2-bf61-c3a021fa18c7,5dbbcfdd-641d-42ed-b89a-2cb2451897ef" --list
 ```
 
-`--site-id` skips the SharePoint site-resolution API call, so the app only asks
-for `Notes.Read.All`.
-
-If your tenant does allow `Sites.Read.All`, you can use the older automatic Graph
-resolver:
-
-```bash
-python main.py --site-url "https://yourtenant.sharepoint.com/teams/TEAM-SITE-NAME/Shared%20Documents" --resolve-site-url-with-graph --list
-```
-
-You can also put stable defaults in `.env` instead of typing flags every time:
+After listing, the app prints the exact command to download one notebook:
 
 ```text
-ONENOTE_OUT=~/OneNoteExport
-ONENOTE_NOTEBOOK=CSX4107
-ONENOTE_FORMATS=md,txt
-ONENOTE_SITE_ID=yourtenant.sharepoint.com,siteCollectionGuid,webGuid
+== To download one notebook ==
+python main.py --site-id "..." --notebook "2026-1 BAD 542 Notebook"
 ```
+
+Run that command to export the notebook.
 
 ## Output
 
-Output is organized like this:
+By default, exports go into `onenote_export/`:
 
 ```text
-OneNoteExport/
-  Notebook Name/
+onenote_export/
+  2026-1 BAD 542 Notebook/
     manifest.json
-    Section Name/
-      Page title-abc123.html
-      Page title-abc123.md
-      Page title-abc123.txt
+    _Content Library_03 Reverse Proxy/
+      [CW] Reverse Proxy-c70597d6e4.html
+      Reverse Proxy-c70597d6e4.html
 ```
 
-The short suffix in each filename comes from the OneNote page ID. It helps avoid
-collisions when multiple pages have the same title.
+Each notebook gets its own folder. Section groups and sections become folders
+inside the notebook folder. The short suffix in each page filename comes from
+the OneNote page ID and helps avoid filename collisions.
+
+Use `--out` to choose another output root:
+
+```bash
+python main.py --out ~/OneNoteExport --notebook "2026-1 BAD 542 Notebook"
+```
+
+## Common Commands
+
+List notebooks from your own OneNote area:
+
+```bash
+python main.py --list
+```
+
+Export one notebook:
+
+```bash
+python main.py --notebook "2026-1 BAD 542 Notebook"
+```
+
+Export to a specific folder:
+
+```bash
+python main.py --out ~/OneNoteExport --notebook "2026-1 BAD 542 Notebook"
+```
+
+Export HTML plus Markdown and TXT:
+
+```bash
+python main.py --formats md,txt --notebook "2026-1 BAD 542 Notebook"
+```
+
+List notebooks from a resolved SharePoint site:
+
+```bash
+python main.py --site-id "yourtenant.sharepoint.com,siteCollectionGuid,webGuid" --list
+```
+
+Export from a resolved SharePoint site:
+
+```bash
+python main.py --site-id "yourtenant.sharepoint.com,siteCollectionGuid,webGuid" --notebook "Notebook Name"
+```
+
+Advanced Graph resolver, only for tenants that allow `Sites.Read.All`:
+
+```bash
+python main.py --site-url "PASTE_LINK" --resolve-site-url-with-graph --list
+```
+
+## Portable `.env` Setup
+
+The app reads `.env` automatically. CLI flags override `.env`, and real shell
+environment variables override `.env` too.
+
+Useful `.env` values:
+
+```text
+ONENOTE_CLIENT_ID=paste-your-application-client-id-here
+ONENOTE_TENANT_ID=organizations
+ONENOTE_SITE_ID=yourtenant.sharepoint.com,siteCollectionGuid,webGuid
+ONENOTE_OUT=onenote_export
+ONENOTE_NOTEBOOK=2026-1 BAD 542 Notebook
+ONENOTE_FORMATS=
+```
+
+Once `ONENOTE_SITE_ID` and `ONENOTE_NOTEBOOK` are set, you can usually run:
+
+```bash
+python main.py
+```
+
+or press PyCharm's run button on `main.py`.
+
+## Requirements
+
+Python dependencies live in `requirements.txt`:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+Packages:
+
+- `msal`: Microsoft Authentication Library for device-code login.
+- `requests`: HTTP client for Microsoft Graph calls.
+
+Optional system dependency for Markdown/TXT/RTF conversion:
+
+```bash
+brew install pandoc
+```
+
+You do not need Pandoc if you only want `.html`.
+
+## Microsoft App Setup
+
+The app expects:
+
+- A Microsoft Entra app registration.
+- Public client/device-code flow enabled.
+- Delegated Microsoft Graph permission: `Notes.Read.All`.
+- The Application/client ID from the app registration.
+
+You do not need a client secret.
+
+The default `--site-url` helper does not need `Sites.Read.All`. The advanced
+`--resolve-site-url-with-graph` mode does need delegated `Sites.Read.All`, which
+many school/work tenants block behind admin approval.
+
+## PyCharm
+
+Use `main.py` as the run target.
+
+Make sure PyCharm uses this project's virtualenv:
+
+```text
+<project folder>/.venv/bin/python
+```
+
+If PyCharm runs something like `/Users/.../miniforge3/bin/python3`, it is using
+Miniforge/Conda base instead of this project venv. Dependencies installed into
+`.venv` will not be visible there.
 
 ## Token Cache
 
-The script stores an MSAL token cache at:
+The app stores Microsoft login tokens in:
 
 ```text
 .msal_token_cache.json
 ```
 
-That file is ignored by git. Treat it as private because it can contain reusable
-login tokens. If you change permissions in Entra or want to force a fresh login,
-delete the cache:
+That file is ignored by git. Treat it as private. Delete it if you need to force
+a fresh Microsoft login:
 
 ```bash
 rm .msal_token_cache.json
@@ -278,39 +258,28 @@ rm .msal_token_cache.json
 
 ## Troubleshooting
 
-If `--list` says no notebooks were found, first try without `--notebook` and
-confirm the notebook is visible to the same account in OneNote.
+If `--list` shows no notebooks, make sure you are signed in with the same
+account that can see the notebook in OneNote or Teams.
 
-If `--notebook "Some Name"` says no notebooks matched, the script will print the
-notebooks it can see. Copy one of those names exactly. If your class notebook is
-not in that list, it may be stored under a Microsoft 365 group or SharePoint site
-instead of `/me`. Use `--site-url` with a Teams/SharePoint URL for that class.
+If a Teams notebook is missing from `/me`, use the Teams/Class Notebook flow with
+`--site-url`.
 
-If Microsoft says admin approval is required, your org blocks user consent for
-the requested Graph permission. Ask IT to approve delegated `Notes.Read.All` for
-your app registration. The default `--site-url` helper avoids `Sites.Read.All`;
-only `--resolve-site-url-with-graph` needs that permission.
+If Microsoft says admin approval is required, your tenant may block user consent
+for the requested permission. The normal setup only needs `Notes.Read.All`; the
+advanced Graph site resolver also needs `Sites.Read.All`.
 
-If Microsoft returns `AADSTS50059` or says no tenant-identifying information was
-found, check `.env`:
+If Microsoft returns `AADSTS50059`, set this in `.env`:
 
 ```text
 ONENOTE_TENANT_ID=organizations
 ```
 
-You can also use the Directory/tenant ID from the app registration Overview page.
-Do not leave `ONENOTE_TENANT_ID` blank in PyCharm's run configuration.
-
-If `.html` files export but `.md`/`.txt`/`.rtf` files do not appear, install
-Pandoc or run with `--formats ""` for HTML-only export.
-
-If a class notebook is missing from `/me`, it may live under a Microsoft 365
-group or SharePoint site. Use `--location "/groups/GROUP_ID"` or
-`--location "/sites/SITE_ID"` once you know the correct ID.
+If `.html` files export but `.md`, `.txt`, or `.rtf` files do not appear,
+install Pandoc or leave `ONENOTE_FORMATS` blank for HTML-only export.
 
 ## Development
 
-Run tests with:
+Run tests:
 
 ```bash
 python -m unittest discover -s tests
