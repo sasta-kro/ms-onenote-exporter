@@ -18,7 +18,7 @@ from urllib.parse import quote, unquote, urlparse
 
 GRAPH_ROOT = "https://graph.microsoft.com/v1.0"
 DEFAULT_SCOPES = ["Notes.Read.All"]
-SECTION_HEADING_DECORATION = "=="
+SECTION_HEADING_DECORATION_TEXT = ">>> {text}"
 GUID_PATTERN = re.compile(
     r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
 )
@@ -60,7 +60,13 @@ def log_recommendation(message: str) -> None:
 
 
 def section_heading(text: str) -> str:
-    return f"{SECTION_HEADING_DECORATION} {text} {SECTION_HEADING_DECORATION}"
+    template = SECTION_HEADING_DECORATION_TEXT
+    if "{" not in template:
+        return f"{template} {text} {template}"
+    try:
+        return template.format(text=text)
+    except IndexError:
+        return template.format(text)
 
 
 def env_value(name: str, default: str | None = None) -> str | None:

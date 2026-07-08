@@ -33,8 +33,14 @@ class SafeNameTests(unittest.TestCase):
 
 
 class CliHeadingTests(unittest.TestCase):
-    def test_section_heading_uses_global_decoration(self) -> None:
-        with patch.object(export_onenote, "SECTION_HEADING_DECORATION", "##"):
+    def test_section_heading_accepts_full_named_template(self) -> None:
+        with patch.object(export_onenote, "SECTION_HEADING_DECORATION_TEXT", ">>> {text}"):
+            result = export_onenote.section_heading("Step 1")
+
+        self.assertEqual(result, ">>> Step 1")
+
+    def test_section_heading_accepts_plain_decoration_token(self) -> None:
+        with patch.object(export_onenote, "SECTION_HEADING_DECORATION_TEXT", "##"):
             result = export_onenote.section_heading("Step 1")
 
         self.assertEqual(result, "## Step 1 ##")
@@ -596,17 +602,17 @@ class CliTests(unittest.TestCase):
             [call.args[0] for call in print_mock.call_args_list],
             [
                 "",
-                "== Detected notebook storage site (for checking only) ==",
+                export_onenote.section_heading("Detected notebook storage site (for checking only)"),
                 "This is the Teams/SharePoint site that stores the notebook file. You usually do not need to open it.",
                 "https://school.sharepoint.com/teams/2026-GDD-542",
                 "",
-                "== Step 1 (SITE_GUID): open this in your signed-in browser ==",
+                export_onenote.section_heading("Step 1 (SITE_GUID): open this in your signed-in browser"),
                 "https://school.sharepoint.com/teams/2026-GDD-542/_api/site/id",
                 "",
-                "== Step 2 (WEB_GUID): open this in your signed-in browser ==",
+                export_onenote.section_heading("Step 2 (WEB_GUID): open this in your signed-in browser"),
                 "https://school.sharepoint.com/teams/2026-GDD-542/_api/web/id",
                 "",
-                "== Step 3: copy the two GUID values, then run ==",
+                export_onenote.section_heading("Step 3: copy the two GUID values, then run"),
                 'python main.py --site-id "school.sharepoint.com,SITE_GUID,WEB_GUID" --list',
                 "",
             ],
@@ -733,7 +739,7 @@ class CliTests(unittest.TestCase):
             [
                 "1. 2026-1 CSX4107(541) Notebook | shared=False | role=Owner",
                 "",
-                "== To download one notebook ==",
+                export_onenote.section_heading("To download one notebook"),
                 'python main.py --site-id "school.sharepoint.com,site-guid,web-guid" --notebook "2026-1 CSX4107(541) Notebook"',
             ],
         )
