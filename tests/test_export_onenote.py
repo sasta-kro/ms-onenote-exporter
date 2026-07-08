@@ -45,6 +45,26 @@ class CliHeadingTests(unittest.TestCase):
 
         self.assertEqual(result, "## Step 1 ##")
 
+    def test_copy_block_indents_copyable_values(self) -> None:
+        result = export_onenote.copy_block('python main.py --site-id "abc" --list')
+
+        self.assertEqual(result, '    python main.py --site-id "abc" --list')
+
+    def test_ascii_box_formats_info_values(self) -> None:
+        result = export_onenote.ascii_box(["1. Course Notebook", "2. Lab Notebook"])
+
+        self.assertEqual(
+            result,
+            "\n".join(
+                [
+                    "+--------------------+",
+                    "| 1. Course Notebook |",
+                    "| 2. Lab Notebook    |",
+                    "+--------------------+",
+                ]
+            ),
+        )
+
 
 class PaginationTests(unittest.TestCase):
     def test_paginate_yields_all_values_and_clears_params_after_first_page(self) -> None:
@@ -610,16 +630,19 @@ class CliTests(unittest.TestCase):
                 "",
                 export_onenote.section_heading("Detected notebook storage site (for checking only)"),
                 "This is the Teams/SharePoint site that stores the notebook file. You usually do not need to open it.",
-                "https://school.sharepoint.com/teams/2026-GDD-542",
+                export_onenote.ascii_box(["https://school.sharepoint.com/teams/2026-GDD-542"]),
                 "",
                 export_onenote.section_heading("Step 1 (SITE_GUID): open this in your signed-in browser"),
-                "https://school.sharepoint.com/teams/2026-GDD-542/_api/site/id",
+                "",
+                export_onenote.copy_block("https://school.sharepoint.com/teams/2026-GDD-542/_api/site/id"),
                 "",
                 export_onenote.section_heading("Step 2 (WEB_GUID): open this in your signed-in browser"),
-                "https://school.sharepoint.com/teams/2026-GDD-542/_api/web/id",
+                "",
+                export_onenote.copy_block("https://school.sharepoint.com/teams/2026-GDD-542/_api/web/id"),
                 "",
                 export_onenote.section_heading("Step 3: copy the two GUID values, then run"),
-                'python main.py --site-id "school.sharepoint.com,SITE_GUID,WEB_GUID" --list',
+                "",
+                export_onenote.copy_block('python main.py --site-id "school.sharepoint.com,SITE_GUID,WEB_GUID" --list'),
                 "",
             ],
         )
@@ -670,8 +693,19 @@ class CliTests(unittest.TestCase):
         client.list_notebooks.assert_called_once_with(
             "/sites/school.sharepoint.com,80a26a44-cf5b-42b2-bf61-c3a021fa18c7,5dbbcfdd-641d-42ed-b89a-2cb2451897ef"
         )
+        resolved_site_id = (
+            "school.sharepoint.com,"
+            "80a26a44-cf5b-42b2-bf61-c3a021fa18c7,"
+            "5dbbcfdd-641d-42ed-b89a-2cb2451897ef"
+        )
         self.assertIn(
-            'python main.py --site-id "school.sharepoint.com,80a26a44-cf5b-42b2-bf61-c3a021fa18c7,5dbbcfdd-641d-42ed-b89a-2cb2451897ef" --list',
+            export_onenote.ascii_box([resolved_site_id]),
+            [call.args[0] for call in print_mock.call_args_list],
+        )
+        self.assertIn(
+            export_onenote.copy_block(
+                'python main.py --site-id "school.sharepoint.com,80a26a44-cf5b-42b2-bf61-c3a021fa18c7,5dbbcfdd-641d-42ed-b89a-2cb2451897ef" --list'
+            ),
             [call.args[0] for call in print_mock.call_args_list],
         )
 
@@ -783,13 +817,18 @@ class CliTests(unittest.TestCase):
         client.list_notebooks.assert_called_once_with(
             "/sites/school.sharepoint.com,site-guid,web-guid"
         )
+        notebook_line = "1. 2026-1 CSX4107(541) Notebook | shared=False | role=Owner"
         self.assertEqual(
             [call.args[0] for call in print_mock.call_args_list],
             [
-                "1. 2026-1 CSX4107(541) Notebook | shared=False | role=Owner",
+                export_onenote.section_heading("Available notebooks"),
+                export_onenote.ascii_box([notebook_line]),
                 "",
                 export_onenote.section_heading("To download one notebook"),
-                'python main.py --site-id "school.sharepoint.com,site-guid,web-guid" --notebook "2026-1 CSX4107(541) Notebook"',
+                "",
+                export_onenote.copy_block(
+                    'python main.py --site-id "school.sharepoint.com,site-guid,web-guid" --notebook "2026-1 CSX4107(541) Notebook"'
+                ),
             ],
         )
 

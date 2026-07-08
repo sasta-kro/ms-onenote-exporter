@@ -67,26 +67,31 @@ python main.py --site-url "PASTE_TEAMS_OR_ONENOTE_BROWSER_LINK"
 The app prints something like this:
 
 ```text
-== Detected notebook storage site (for checking only) ==
+>>>>> Detected notebook storage site (for checking only)
 This is the Teams/SharePoint site that stores the notebook file. You usually do not need to open it.
-https://yourtenant.sharepoint.com/sites/Section_...
++----------------------------------------------------+
+| https://yourtenant.sharepoint.com/sites/Section_... |
++----------------------------------------------------+
 
-== Step 1 (SITE_GUID): open this in your signed-in browser ==
-https://yourtenant.sharepoint.com/sites/Section_.../_api/site/id
+>>>>> Step 1 (SITE_GUID): open this in your signed-in browser
 
-== Paste SITE_GUID page text ==
-Paste the whole XML/browser text here. Finish with an empty line.
+    https://yourtenant.sharepoint.com/sites/Section_.../_api/site/id
+
+>>>>> Paste SITE_GUID page text
+Paste the whole XML/browser text here. PRESS ENTER 2 TIMES TO CONTINUE
 >
 
-== Step 2 (WEB_GUID): open this in your signed-in browser ==
-https://yourtenant.sharepoint.com/sites/Section_.../_api/web/id
+>>>>> Step 2 (WEB_GUID): open this in your signed-in browser
 
-== Paste WEB_GUID page text ==
-Paste the whole XML/browser text here. Finish with an empty line.
+    https://yourtenant.sharepoint.com/sites/Section_.../_api/web/id
+
+>>>>> Paste WEB_GUID page text
+Paste the whole XML/browser text here. PRESS ENTER 2 TIMES TO CONTINUE
 >
 
-== Reusable command ==
-python main.py --site-id "yourtenant.sharepoint.com,SITE_GUID,WEB_GUID" --list
+>>>>> Reusable command
+
+    python main.py --site-id "yourtenant.sharepoint.com,SITE_GUID,WEB_GUID" --list
 ```
 
 Open the Step 1 and Step 2 links in the browser where you are already signed
@@ -108,8 +113,9 @@ python main.py --site-id "assumptionuniversity.sharepoint.com,80a26a44-cf5b-42b2
 After listing, the app prints the exact command to download one notebook:
 
 ```text
-== To download one notebook ==
-python main.py --site-id "..." --notebook "2026-1 BAD 542 Notebook"
+>>>>> To download one notebook
+
+    python main.py --site-id "..." --notebook "2026-1 BAD 542 Notebook"
 ```
 
 Run that command to export the notebook.

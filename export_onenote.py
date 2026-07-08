@@ -18,7 +18,9 @@ from urllib.parse import quote, unquote, urlparse
 
 GRAPH_ROOT = "https://graph.microsoft.com/v1.0"
 DEFAULT_SCOPES = ["Notes.Read.All"]
-SECTION_HEADING_DECORATION_TEXT = ">>> {text}"
+SECTION_HEADING_DECORATION_TEXT = ">>>>> {text}"
+COPY_BLOCK_INDENT = "    "
+INFO_BOX_HORIZONTAL = "-"
 GUID_PATTERN = re.compile(
     r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
 )
@@ -67,6 +69,20 @@ def section_heading(text: str) -> str:
         return template.format(text=text)
     except IndexError:
         return template.format(text)
+
+
+def copy_block(value: str) -> str:
+    return "\n".join(f"{COPY_BLOCK_INDENT}{line}" for line in value.splitlines() or [""])
+
+
+def ascii_box(lines: list[str]) -> str:
+    content = [str(line) for line in lines] or [""]
+    width = max(len(line) for line in content)
+    border = f"+{INFO_BOX_HORIZONTAL * (width + 2)}+"
+    boxed_lines = [border]
+    boxed_lines.extend(f"| {line.ljust(width)} |" for line in content)
+    boxed_lines.append(border)
+    return "\n".join(boxed_lines)
 
 
 def env_value(name: str, default: str | None = None) -> str | None:
@@ -201,7 +217,7 @@ def validate_distinct_sharepoint_guids(site_guid: str, web_guid: str) -> None:
 def read_pasted_guid(label: str, input_stream: Any = sys.stdin) -> str:
     print("")
     print(section_heading(f"Paste {label} page text"))
-    print("Paste the whole XML/browser text here. Finish with an empty line (press Enter 2 times).")
+    print("Paste the whole XML/browser text here. PRESS ENTER 2 TIMES TO CONTINUE")
     print(">")
 
     lines: list[str] = []
@@ -236,24 +252,27 @@ def prompt_for_site_id_from_site_url(
     print("")
     print(section_heading("Detected notebook storage site (for checking only)"))
     print("This is the Teams/SharePoint site that stores the notebook file. You usually do not need to open it.")
-    print(helper.site_root)
+    print(ascii_box([helper.site_root]))
     print("")
     print(section_heading("Step 1 (SITE_GUID): open this in your signed-in browser"))
-    print(helper.site_id_url)
+    print("")
+    print(copy_block(helper.site_id_url))
     site_guid = read_pasted_guid("SITE_GUID", input_stream)
     print("")
     print(section_heading("Step 2 (WEB_GUID): open this in your signed-in browser"))
-    print(helper.web_id_url)
+    print("")
+    print(copy_block(helper.web_id_url))
     web_guid = read_pasted_guid("WEB_GUID", input_stream)
     validate_distinct_sharepoint_guids(site_guid, web_guid)
 
     site_id = helper.site_id_template.replace("SITE_GUID", site_guid).replace("WEB_GUID", web_guid)
     print("")
     print(section_heading("Resolved site ID"))
-    print(site_id)
+    print(ascii_box([site_id]))
     print("")
     print(section_heading("Reusable command"))
-    print(f"python main.py --site-id {shell_double_quote(site_id)} {next_flag}")
+    print("")
+    print(copy_block(f"python main.py --site-id {shell_double_quote(site_id)} {next_flag}"))
     print("")
     return site_id
 
@@ -270,16 +289,19 @@ def print_site_id_helper(site_url: str, *, list_notebooks: bool = False, noteboo
     print("")
     print(section_heading("Detected notebook storage site (for checking only)"))
     print("This is the Teams/SharePoint site that stores the notebook file. You usually do not need to open it.")
-    print(helper.site_root)
+    print(ascii_box([helper.site_root]))
     print("")
     print(section_heading("Step 1 (SITE_GUID): open this in your signed-in browser"))
-    print(helper.site_id_url)
+    print("")
+    print(copy_block(helper.site_id_url))
     print("")
     print(section_heading("Step 2 (WEB_GUID): open this in your signed-in browser"))
-    print(helper.web_id_url)
+    print("")
+    print(copy_block(helper.web_id_url))
     print("")
     print(section_heading("Step 3: copy the two GUID values, then run"))
-    print(f"python main.py --site-id {shell_double_quote(helper.site_id_template)} {next_flag}")
+    print("")
+    print(copy_block(f"python main.py --site-id {shell_double_quote(helper.site_id_template)} {next_flag}"))
     print("")
 
 
@@ -850,16 +872,20 @@ def print_notebooks(client: GraphClient, location: str, export_command_base: str
     if not notebooks:
         print("No notebooks found.")
         return
+    notebook_lines: list[str] = []
     for index, notebook in enumerate(notebooks, start=1):
         name = notebook.get("displayName") or "Untitled notebook"
         shared = notebook.get("isShared")
         role = notebook.get("userRole")
-        print(f"{index}. {name} | shared={shared} | role={role}")
+        notebook_lines.append(f"{index}. {name} | shared={shared} | role={role}")
+    print(section_heading("Available notebooks"))
+    print(ascii_box(notebook_lines))
     if export_command_base:
         first_name = notebooks[0].get("displayName") or "Untitled notebook"
         print("")
         print(section_heading("To download one notebook"))
-        print(f"{export_command_base} --notebook {shell_double_quote(first_name)}")
+        print("")
+        print(copy_block(f"{export_command_base} --notebook {shell_double_quote(first_name)}"))
 
 
 def main(
