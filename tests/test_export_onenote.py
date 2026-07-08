@@ -32,6 +32,14 @@ class SafeNameTests(unittest.TestCase):
         self.assertEqual(len(export_onenote.safe_name("x" * 200)), 140)
 
 
+class CliHeadingTests(unittest.TestCase):
+    def test_section_heading_uses_global_decoration(self) -> None:
+        with patch.object(export_onenote, "SECTION_HEADING_DECORATION", "##"):
+            result = export_onenote.section_heading("Step 1")
+
+        self.assertEqual(result, "## Step 1 ##")
+
+
 class PaginationTests(unittest.TestCase):
     def test_paginate_yields_all_values_and_clears_params_after_first_page(self) -> None:
         calls: list[tuple[str, dict[str, str] | None]] = []
