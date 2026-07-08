@@ -1,28 +1,34 @@
 # MS OneNote Scraper
 
-Export Microsoft OneNote notebooks that your work/school account can already
-read into local files.
+## What This Tool Does
 
-The app always saves every page as `.html`. HTML is the format Microsoft Graph
-returns and usually keeps more OneNote structure than plain text. If Pandoc is
-installed, the app can also create `.md`, `.txt`, or `.rtf` copies.
+MS OneNote Scraper exports Microsoft OneNote notebooks into local files.
 
-This is not an organization-wide backup tool. It only exports notebooks visible
-to the signed-in Microsoft account.
+It is made for class notebooks and Teams notebooks that are already readable in
+a school or work Microsoft account. The common problem is simple: OneNote can be
+viewed in Teams, but there is no clean bulk download button. This tool fills
+that gap.
 
-## What It Does
+The main output is HTML. HTML keeps more of the original OneNote page structure
+than plain text. If Pandoc is installed, the same pages can also be converted to
+Markdown, TXT, or RTF.
 
-- Uses Microsoft device-code login in the terminal.
-- Lists notebooks from your own OneNote area or a resolved SharePoint site.
-- Supports Teams/Class Notebook links through a low-permission site ID helper.
-- Walks notebooks, section groups, sections, and pages.
-- Downloads pages as local HTML files.
-- Writes one `manifest.json` inside each exported notebook folder.
-- Optionally converts cleaned OneNote HTML pages with Pandoc.
+This is not an admin backup tool. It does not download every notebook in an
+organization. It only exports notebooks visible to the signed-in Microsoft
+account.
+
+## What It Can Export
+
+- Teams/Class Notebook pages stored in SharePoint.
+- Notebooks visible from the signed-in OneNote account.
+- Sections, section groups, and pages.
+- HTML files for every page.
+- Optional Markdown, TXT, and RTF copies.
+- A `manifest.json` file for each exported notebook.
 
 ## Quick Start
 
-From this project directory:
+Run these commands inside this project folder:
 
 ```bash
 python -m venv .venv
@@ -31,140 +37,113 @@ python -m pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edit `.env` and set your Microsoft Entra application/client ID. To find it,
-open [Microsoft Entra admin center](https://entra.microsoft.com/), go to
-`Identity -> Applications -> App registrations`, open your app, then copy
-`Application (client) ID` from the Overview page.
+Open `.env` and set the Microsoft Entra application/client ID:
 
 ```text
-ONENOTE_CLIENT_ID=paste-your-application-client-id-here
+ONENOTE_CLIENT_ID=paste-application-client-id-here
 ONENOTE_TENANT_ID=organizations
 ```
 
-Then try listing notebooks from your own OneNote area:
+To find the client ID, open [Microsoft Entra admin center](https://entra.microsoft.com/),
+then go to `Identity -> Applications -> App registrations`. Open the app
+registration for this exporter and copy `Application (client) ID` from the
+Overview page.
+
+If no app registration exists yet, create one first. Microsoft has the official
+guide here: [Register an application with the Microsoft identity platform](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app).
+
+The client ID is not a student ID, email address, tenant ID, or SharePoint ID.
+Do not paste `Directory (tenant) ID` into `ONENOTE_CLIENT_ID`.
+
+After `.env` is ready, list notebooks visible from the signed-in OneNote
+account:
 
 ```bash
 python main.py --list
 ```
 
-On first run, Microsoft will ask you to open a device-login URL and enter the
-code printed in the terminal. The code comes from this app's terminal output,
-not from Teams or OneNote.
+On the first run, Microsoft prints a browser login link and a device code in the
+terminal. Open the link, paste the code shown in the terminal, and finish the
+Microsoft login page. The code is not in Teams or OneNote.
 
-## Teams/Class Notebook Flow
+## Example Flow: Export a Teams Class Notebook
 
-Most class notebooks in Teams are stored in SharePoint. `/me` may show no
-notebooks even when you can see the notebook in Teams.
+Most Teams class notebooks are stored in SharePoint. In that case, `python
+main.py --list` may show nothing even when the notebook is visible in Teams.
+That is normal.
 
-Use this flow:
+Flow:
 
-1. In Teams, open the class notebook.
-2. Use the globe/open-in-browser button.
+1. Open the class notebook in Teams.
+2. Press the globe/open-in-browser button.
 3. Copy the browser URL.
-4. Run:
+4. Run this command:
 
 ```bash
 python main.py --site-url "PASTE_TEAMS_OR_ONENOTE_BROWSER_LINK"
 ```
 
-The app prints something like this:
+The app then prints two helper links. Open both links in a browser already
+signed in with the same school or work account.
+
+Each helper page shows XML text with one GUID. Paste the whole page text back
+into the terminal. The app extracts the GUID automatically.
+
+Example terminal shape:
 
 ```text
->>>>> Detected notebook storage site (for checking only)
-This is the Teams/SharePoint site that stores the notebook file. You usually do not need to open it.
-╭────────────────────────────────────────────────────╮
-│ https://yourtenant.sharepoint.com/sites/Section_... │
-╰────────────────────────────────────────────────────╯
+>>>>> Step 1 (SITE_GUID): open this in the signed-in browser
 
->>>>> Step 1 (SITE_GUID): open this in your signed-in browser
-
-╭─────────────────────────────────────────────────────────────────╮
-│ https://yourtenant.sharepoint.com/sites/Section_.../_api/site/id │
-╰─────────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────────╮
+│ https://school.sharepoint.com/sites/Section_.../_api/site/id  │
+╰───────────────────────────────────────────────────────────────╯
 
 >>>>> Paste SITE_GUID page text
 ╭────────────────────────────────────────────────────────────╮
 │ After pasting the XML text, press ENTER twice to continue. │
 ╰────────────────────────────────────────────────────────────╯
 >
-
->>>>> Step 2 (WEB_GUID): open this in your signed-in browser
-
-╭────────────────────────────────────────────────────────────────╮
-│ https://yourtenant.sharepoint.com/sites/Section_.../_api/web/id │
-╰────────────────────────────────────────────────────────────────╯
-
->>>>> Paste WEB_GUID page text
-╭────────────────────────────────────────────────────────────╮
-│ After pasting the XML text, press ENTER twice to continue. │
-╰────────────────────────────────────────────────────────────╯
->
-
->>>>> Reusable command to see Notebooks in the link
-
-    python main.py --site-id "yourtenant.sharepoint.com,SITE_GUID,WEB_GUID" --list
-
->>>>> Available notebooks
-╭────────────────────────────╮
-│ 1. 2026-1 BAD 542 Notebook │
-╰────────────────────────────╯
-
->>>>> Auto-downloading the only notebook
-╭─────────────────────────╮
-│ 2026-1 BAD 542 Notebook │
-╰─────────────────────────╯
-
->>>>> If you want to export to Markdown, TXT, or RTF format instead:
-
-    python main.py --site-id "yourtenant.sharepoint.com,SITE_GUID,WEB_GUID" --notebook "2026-1 BAD 542 Notebook" --formats md
-    python main.py --site-id "yourtenant.sharepoint.com,SITE_GUID,WEB_GUID" --notebook "2026-1 BAD 542 Notebook" --formats txt
-    python main.py --site-id "yourtenant.sharepoint.com,SITE_GUID,WEB_GUID" --notebook "2026-1 BAD 542 Notebook" --formats rtf
 ```
 
-Open the Step 1 and Step 2 links in the browser where you are already signed
-into your school account. Each page shows one GUID. You can paste the whole
-page text, including the browser's "This XML file does not appear..." message,
-or just the `<d:Id>...</d:Id>` XML line. The app extracts the GUID for you.
+The pasted text can be the full browser page text:
 
-After both values are pasted, the app lists notebooks automatically. If exactly
-one notebook is available, it downloads that notebook immediately. HTML is
-always exported; add `--formats md`, `--formats txt`, or `--formats rtf` if you
-also want converted copies. Flag order does not matter, so this works:
+```xml
+This XML file does not appear to have any style information associated with it.
+<d:Id m:type="Edm.Guid">80a26a44-cf5b-42b2-bf61-c3a021fa18c7</d:Id>
+```
+
+or only the XML line:
+
+```xml
+<d:Id m:type="Edm.Guid">80a26a44-cf5b-42b2-bf61-c3a021fa18c7</d:Id>
+```
+
+After both GUID values are pasted, the app lists notebooks in that SharePoint
+site. If only one notebook exists, it downloads that notebook automatically.
+
+To export Markdown instead of only HTML, put `--formats md` anywhere in the
+command:
 
 ```bash
 python main.py --formats md --site-url "PASTE_TEAMS_OR_ONENOTE_BROWSER_LINK"
 ```
 
-If you only want to list notebooks without downloading, add `--list`:
+For TXT or RTF:
+
+```bash
+python main.py --formats txt --site-url "PASTE_TEAMS_OR_ONENOTE_BROWSER_LINK"
+python main.py --formats rtf --site-url "PASTE_TEAMS_OR_ONENOTE_BROWSER_LINK"
+```
+
+To list notebooks without downloading, add `--list`:
 
 ```bash
 python main.py --site-url "PASTE_TEAMS_OR_ONENOTE_BROWSER_LINK" --list
 ```
 
-The app also prints a reusable `--site-id` command so you can skip the paste
-step next time. If the app is running in a non-interactive shell, it prints the
-manual helper links and command instead of prompting.
+## Output Folder
 
-Reusable site ID example:
-
-```bash
-python main.py --site-id "assumptionuniversity.sharepoint.com,80a26a44-cf5b-42b2-bf61-c3a021fa18c7,5dbbcfdd-641d-42ed-b89a-2cb2451897ef" --list
-```
-
-When a site has more than one notebook, copy the exact command printed under
-`To download one notebook`:
-
-```text
->>>>> To download one notebook
-
-    python main.py --site-id "..." --notebook "2026-1 BAD 542 Notebook"
-```
-
-Run that command to export the chosen notebook.
-
-## Output
-
-By default, exports go into `onenote_export/`:
+Exports go into `onenote_export/` by default:
 
 ```text
 onenote_export/
@@ -175,11 +154,11 @@ onenote_export/
       Reverse Proxy-c70597d6e4.html
 ```
 
-Each notebook gets its own folder. Section groups and sections become folders
-inside the notebook folder. The short suffix in each page filename comes from
-the OneNote page ID and helps avoid filename collisions.
+Each notebook gets one folder. Section groups and sections become folders
+inside the notebook folder. Each page filename has a short ID suffix to avoid
+name collisions.
 
-Use `--out` to choose another output root:
+To choose another output folder:
 
 ```bash
 python main.py --out ~/OneNoteExport --notebook "2026-1 BAD 542 Notebook"
@@ -187,22 +166,22 @@ python main.py --out ~/OneNoteExport --notebook "2026-1 BAD 542 Notebook"
 
 ## Common Commands
 
-List notebooks from your own OneNote area:
+List notebooks from the signed-in OneNote account:
 
 ```bash
 python main.py --list
 ```
 
-Export one notebook:
+Export one notebook from the signed-in OneNote account:
 
 ```bash
 python main.py --notebook "2026-1 BAD 542 Notebook"
 ```
 
-Export to a specific folder:
+Export from a Teams/Class Notebook browser link:
 
 ```bash
-python main.py --out ~/OneNoteExport --notebook "2026-1 BAD 542 Notebook"
+python main.py --site-url "PASTE_TEAMS_OR_ONENOTE_BROWSER_LINK"
 ```
 
 Export HTML plus Markdown and TXT:
@@ -211,114 +190,132 @@ Export HTML plus Markdown and TXT:
 python main.py --formats md,txt --notebook "2026-1 BAD 542 Notebook"
 ```
 
-`--formats html` is accepted too, but it is a no-op because HTML is already the
-default output:
-
-```bash
-python main.py --formats html --site-url "PASTE_TEAMS_OR_ONENOTE_BROWSER_LINK"
-```
-
-Converted `.md`, `.txt`, and `.rtf` files are cleaned before Pandoc runs:
-OneNote layout wrappers are stripped, raw `<span>` noise is removed, and strange
-OneNote placeholder characters are turned into line breaks. Image URLs are
-omitted from converted text formats by default.
-
-Keep image links in converted files:
+Keep image links in converted Markdown/TXT/RTF files:
 
 ```bash
 python main.py --formats md,txt --include-image-links --notebook "2026-1 BAD 542 Notebook"
 ```
 
-List notebooks from a resolved SharePoint site:
+List notebooks from a resolved SharePoint site ID:
 
 ```bash
-python main.py --site-id "yourtenant.sharepoint.com,siteCollectionGuid,webGuid" --list
+python main.py --site-id "school.sharepoint.com,siteCollectionGuid,webGuid" --list
 ```
 
-Export from a resolved SharePoint site:
+Export from a resolved SharePoint site ID:
 
 ```bash
-python main.py --site-id "yourtenant.sharepoint.com,siteCollectionGuid,webGuid" --notebook "Notebook Name"
+python main.py --site-id "school.sharepoint.com,siteCollectionGuid,webGuid" --notebook "Notebook Name"
 ```
+
+## Formats
+
+HTML is always exported.
+
+Accepted `--formats` values:
+
+- `html`: accepted, but no extra file is made because HTML already exists.
+- `md`: Markdown copy.
+- `txt`: plain text copy.
+- `rtf`: rich text copy.
+- `md,txt`: comma-separated values also work.
+
+Markdown, TXT, and RTF conversion needs Pandoc:
+
+```bash
+brew install pandoc
+```
+
+Converted files are cleaned before Pandoc runs. The cleaner removes common
+OneNote layout wrappers, raw span noise, and strange placeholder characters.
+Image URLs are omitted from converted text formats by default.
+
+Some OneNote pages are screenshots or pasted images. Markdown and TXT cannot
+extract text from images. OCR is not included.
 
 ## Portable `.env` Setup
 
 The app reads `.env` automatically. CLI flags override `.env`, and real shell
 environment variables override `.env` too.
 
-Start by copying the example file:
-
-```bash
-cp .env.example .env
-```
-
-Then fill in the values you actually want to reuse across runs.
-
-Required:
+Common `.env` values:
 
 ```text
-ONENOTE_CLIENT_ID=paste-your-application-client-id-here
+ONENOTE_CLIENT_ID=paste-application-client-id-here
 ONENOTE_TENANT_ID=organizations
-```
-
-`ONENOTE_CLIENT_ID` comes from your Microsoft Entra app registration:
-
-1. Open [Microsoft Entra admin center](https://entra.microsoft.com/).
-2. In the left sidebar, go to `Identity -> Applications -> App registrations`.
-3. Open the app registration you created for this exporter.
-4. If you have not created an app yet, click `New registration` first. Microsoft
-   has the full setup guide here: [Register an application with the Microsoft identity platform](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app).
-5. On the app's Overview page, copy `Application (client) ID`.
-6. Paste that GUID as `ONENOTE_CLIENT_ID=...` in `.env`.
-
-This is not your student ID, email address, tenant ID, or SharePoint ID. Do not
-paste `Directory (tenant) ID` into `ONENOTE_CLIENT_ID`.
-
-Keep `ONENOTE_TENANT_ID=organizations` for normal uni/work Teams notebooks.
-That tells Microsoft login to use work/school accounts. If you intentionally
-need something else, valid values include a Directory tenant GUID, a tenant
-domain like `yourschool.edu`, `common`, or `consumers`.
-
-Useful optional values:
-
-```text
-ONENOTE_SITE_ID=yourtenant.sharepoint.com,siteCollectionGuid,webGuid
+ONENOTE_SITE_ID=school.sharepoint.com,siteCollectionGuid,webGuid
 ONENOTE_OUT=onenote_export
 ONENOTE_FORMATS=
 ONENOTE_NOTEBOOK=2026-1 BAD 542 Notebook
 ONENOTE_TOKEN_CACHE=.msal_token_cache.json
 ```
 
-`ONENOTE_SITE_ID` is the reusable SharePoint/Graph site ID for one Teams/Class
-Notebook site. Get it by running:
+### `ONENOTE_CLIENT_ID`
+
+Required. This comes from the Microsoft Entra app registration.
+
+Path:
+
+```text
+Microsoft Entra admin center
+Identity -> Applications -> App registrations
+App Overview -> Application (client) ID
+```
+
+Portal: [https://entra.microsoft.com/](https://entra.microsoft.com/)
+
+Official guide: [Register an application with the Microsoft identity platform](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app)
+
+### `ONENOTE_TENANT_ID`
+
+Default:
+
+```text
+ONENOTE_TENANT_ID=organizations
+```
+
+`organizations` means Microsoft work or school accounts. This is the normal
+choice for university and company notebooks.
+
+Other valid values:
+
+- A Directory tenant GUID.
+- A tenant domain, for example `school.edu`.
+- `common`, for personal Microsoft accounts and work/school accounts.
+- `consumers`, for personal Microsoft accounts only.
+
+### `ONENOTE_SITE_ID`
+
+Optional, but useful after a Teams/Class Notebook link has already been
+resolved once.
+
+To get it:
 
 ```bash
 python main.py --site-url "PASTE_TEAMS_OR_ONENOTE_BROWSER_LINK"
 ```
 
-Open the two helper links the app prints, paste each XML page back into the
-terminal, then copy the `Resolved site ID` value into `.env`.
+After the two GUID helper pages are pasted, the app prints a resolved site ID.
+Save that value in `.env` to skip the helper flow later.
 
-Use `ONENOTE_FORMATS` for extra formats next to HTML, for example `md`, `txt`,
-`rtf`, or `md,txt`. HTML is always exported, so `html` is accepted but does not
-add another file. Markdown/TXT/RTF conversion needs Pandoc:
+Shape:
 
-```bash
-brew install pandoc
+```text
+school.sharepoint.com,siteCollectionGuid,webGuid
 ```
 
-Once `ONENOTE_SITE_ID` and `ONENOTE_NOTEBOOK` are set, you can usually run:
+### Other `.env` Values
 
-```bash
-python main.py
-```
+`ONENOTE_OUT` sets the export folder.
 
-For first-time Teams/Class Notebook links, prefer the CLI flag instead of
-storing the pasted browser URL in `.env`:
+`ONENOTE_FORMATS` sets extra formats, for example `md`, `txt`, `rtf`, or
+`md,txt`.
 
-```bash
-python main.py --site-url "PASTE_TEAMS_OR_ONENOTE_BROWSER_LINK"
-```
+`ONENOTE_NOTEBOOK` filters notebook names. It can make `python main.py` export
+one known notebook without typing the name each time.
+
+`ONENOTE_TOKEN_CACHE` sets the Microsoft login token cache file. Keep this file
+private.
 
 ## Requirements
 
@@ -333,28 +330,23 @@ Packages:
 - `msal`: Microsoft Authentication Library for device-code login.
 - `requests`: HTTP client for Microsoft Graph calls.
 
-Optional system dependency for Markdown/TXT/RTF conversion:
+Optional system dependency:
 
 ```bash
 brew install pandoc
 ```
 
-You do not need Pandoc if you only want `.html`.
-
-Some OneNote pages are actually screenshots or pasted images. Markdown and TXT
-cannot extract text from those images; they need OCR, which this app does not
-perform yet.
+Pandoc is only needed for Markdown, TXT, and RTF conversion.
 
 ## Microsoft App Setup
 
-The app expects:
+The Microsoft Entra app registration needs:
 
-- A Microsoft Entra app registration.
 - Public client/device-code flow enabled.
 - Delegated Microsoft Graph permission: `Notes.Read.All`.
-- The Application/client ID from the app registration.
+- No client secret.
 
-You do not need a client secret.
+The app uses device-code login. It does not need a password inside `.env`.
 
 ## Token Cache
 
@@ -364,8 +356,9 @@ The app stores Microsoft login tokens in:
 .msal_token_cache.json
 ```
 
-That file is ignored by git. Treat it as private. Delete it if you need to force
-a fresh Microsoft login:
+That file is ignored by git. Treat it as private.
+
+Delete it to force a fresh Microsoft login:
 
 ```bash
 rm .msal_token_cache.json
@@ -373,23 +366,24 @@ rm .msal_token_cache.json
 
 ## Troubleshooting
 
-If `--list` shows no notebooks, make sure you are signed in with the same
-account that can see the notebook in OneNote or Teams.
+If `--list` shows no notebooks, the notebook may be stored under a Teams or
+SharePoint site. Try the Teams/Class Notebook flow with `--site-url`.
 
-If a Teams notebook is missing from `/me`, use the Teams/Class Notebook flow with
-`--site-url`.
-
-If Microsoft says admin approval is required, your tenant may block user consent
-for the requested permission. The normal setup only needs `Notes.Read.All`.
-
-If Microsoft returns `AADSTS50059`, set this in `.env`:
+If Microsoft returns `AADSTS50059`, keep this value in `.env`:
 
 ```text
 ONENOTE_TENANT_ID=organizations
 ```
 
+If Microsoft says admin approval is required, the Microsoft tenant may block
+user consent for the requested permission. The normal setup only asks for
+`Notes.Read.All`.
+
 If `.html` files export but `.md`, `.txt`, or `.rtf` files do not appear,
 install Pandoc or leave `ONENOTE_FORMATS` blank for HTML-only export.
+
+If the same GUID is pasted for both SharePoint helper steps, open the second
+helper link again. Step 1 and Step 2 must return different GUID values.
 
 ## Development
 
