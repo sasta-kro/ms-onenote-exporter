@@ -18,7 +18,7 @@ to the signed-in Microsoft account.
 - Walks notebooks, section groups, sections, and pages.
 - Downloads pages as local HTML files.
 - Writes one `manifest.json` inside each exported notebook folder.
-- Optionally converts HTML pages with Pandoc.
+- Optionally converts cleaned OneNote HTML pages with Pandoc.
 
 ## Quick Start
 
@@ -149,6 +149,17 @@ Export HTML plus Markdown and TXT:
 python main.py --formats md,txt --notebook "2026-1 BAD 542 Notebook"
 ```
 
+Converted `.md`, `.txt`, and `.rtf` files are cleaned before Pandoc runs:
+OneNote layout wrappers are stripped, raw `<span>` noise is removed, and strange
+OneNote placeholder characters are turned into line breaks. Image URLs are
+omitted from converted text formats by default.
+
+Keep image links in converted files:
+
+```bash
+python main.py --formats md,txt --include-image-links --notebook "2026-1 BAD 542 Notebook"
+```
+
 List notebooks from a resolved SharePoint site:
 
 ```bash
@@ -211,6 +222,10 @@ brew install pandoc
 ```
 
 You do not need Pandoc if you only want `.html`.
+
+Some OneNote pages are actually screenshots or pasted images. Markdown and TXT
+cannot extract text from those images; they need OCR, which this app does not
+perform yet.
 
 ## Microsoft App Setup
 

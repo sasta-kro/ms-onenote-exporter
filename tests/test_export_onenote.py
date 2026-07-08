@@ -180,6 +180,83 @@ class SectionTraversalTests(unittest.TestCase):
 
 
 class ExportNotebookTests(unittest.TestCase):
+    def test_export_page_preserves_titles_with_dot_words(self) -> None:
+        client = Mock()
+        client.bytes.return_value = b"<html><body>Env setup</body></html>"
+        page = {
+            "id": "page-fe6a099c87",
+            "title": "[LAB] 3: Configuration Management (.env) (Local Machine)",
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            record = export_onenote.export_page(
+                client,
+                location="/me",
+                page=page,
+                output_dir=Path(tmpdir),
+                formats=[],
+                include_ids=False,
+            )
+
+            html_path = Path(record["html"])
+
+        self.assertEqual(
+            html_path.name,
+            "[LAB] 3_ Configuration Management (.env) (Local Machine)-fe6a099c87.html",
+        )
+
+    def test_clean_onenote_html_for_text_removes_layout_spans_images_and_placeholders(self) -> None:
+        html = """
+        <html><body data-absolute-enabled="true">
+          <div style="position:absolute;left:48px;top:115px;width:720px">
+            <p>Use <span lang="en-US">.env</span> files.</p>
+            <p>PORT=3000\ufffcDB_HOST=127.0.0.1</p>
+            <img src="https://graph.microsoft.com/v1.0/resource/$value" />
+          </div>
+        </body></html>
+        """
+
+        result = export_onenote.clean_onenote_html_for_text(html, omit_images=True)
+
+        self.assertIn(".env", result)
+        self.assertIn("PORT=3000<br />\nDB_HOST=127.0.0.1", result)
+        self.assertNotIn("<span", result)
+        self.assertNotIn("<div", result)
+        self.assertNotIn("\ufffc", result)
+        self.assertNotIn("graph.microsoft.com", result)
+
+    def test_clean_onenote_html_for_text_can_keep_image_links(self) -> None:
+        html = '<html><body><div><img src="https://graph.microsoft.com/v1.0/resource/$value" /></div></body></html>'
+
+        result = export_onenote.clean_onenote_html_for_text(html, omit_images=False)
+
+        self.assertIn('<img src="https://graph.microsoft.com/v1.0/resource/$value">', result)
+
+    def test_convert_with_pandoc_uses_cleaned_html_for_markdown_by_default(self) -> None:
+        html = """
+        <html><body>
+          <div style="position:absolute;left:48px;top:115px;width:720px">
+            <p>Hello <span lang="en-US">world</span>\ufffcAgain</p>
+            <img src="https://graph.microsoft.com/v1.0/resource/$value" />
+          </div>
+        </body></html>
+        """
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_base = Path(tmpdir) / "sample.with.dot"
+            html_path = Path(f"{output_base}.html")
+            html_path.write_text(html, encoding="utf-8")
+
+            export_onenote.convert_with_pandoc(html_path, output_base, ["md"])
+
+            markdown = Path(f"{output_base}.md").read_text(encoding="utf-8")
+
+        self.assertIn("Hello world\nAgain", markdown)
+        self.assertNotIn("\\\n", markdown)
+        self.assertNotIn("<div", markdown)
+        self.assertNotIn("<span", markdown)
+        self.assertNotIn("graph.microsoft.com", markdown)
+
     def test_export_notebooks_writes_manifest_inside_each_notebook_dir(self) -> None:
         client = Mock()
         client.list_notebooks.return_value = [
@@ -336,6 +413,14 @@ class CliTests(unittest.TestCase):
         )
 
         self.assertEqual(args.site_id, "school.sharepoint.com,site-guid,web-guid")
+
+    def test_parse_args_accepts_include_image_links(self) -> None:
+        args = export_onenote.parse_args(
+            ["--client-id", "abc", "--include-image-links"],
+            env_file=None,
+        )
+
+        self.assertTrue(args.include_image_links)
 
     def test_parse_args_treats_blank_env_values_as_missing(self) -> None:
         with patch.dict(

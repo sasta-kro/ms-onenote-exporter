@@ -11,6 +11,7 @@ import sys
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, unquote, urlparse
@@ -320,6 +321,11 @@ def parse_args(argv: list[str] | None = None, env_file: Path | None = Path(".env
         action="store_true",
         help="Ask OneNote to include object IDs in exported HTML.",
     )
+    parser.add_argument(
+        "--include-image-links",
+        action="store_true",
+        help="Keep Graph image URLs in converted md/txt/rtf output. Default omits them.",
+    )
     return parser.parse_args(argv)
 
 
@@ -501,7 +507,135 @@ def iter_sections(
             yield from iter_sections(client, group, new_prefix)
 
 
-def convert_with_pandoc(html_path: Path, output_base: Path, formats: list[str]) -> None:
+class OneNoteHtmlCleaner(HTMLParser):
+    BLOCK_TAGS = {
+        "address",
+        "article",
+        "aside",
+        "blockquote",
+        "br",
+        "div",
+        "footer",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "header",
+        "li",
+        "main",
+        "ol",
+        "p",
+        "pre",
+        "section",
+        "table",
+        "tr",
+        "ul",
+    }
+    KEEP_ATTRS = {"href", "src", "alt"}
+    UNWRAP_TAGS = {"body", "div", "html", "span"}
+
+    def __init__(self, *, omit_images: bool) -> None:
+        super().__init__(convert_charrefs=True)
+        self.omit_images = omit_images
+        self.parts: list[str] = []
+        self.skip_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
+        if tag in {"head", "script", "style"}:
+            self.skip_depth += 1
+            return
+        if self.skip_depth:
+            return
+        if tag == "img" and self.omit_images:
+            return
+        if tag in self.BLOCK_TAGS:
+            self._newline()
+        if tag in self.UNWRAP_TAGS:
+            return
+        attr_text = self._format_attrs(attrs)
+        self.parts.append(f"<{tag}{attr_text}>")
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        if tag in {"head", "script", "style"} and self.skip_depth:
+            self.skip_depth -= 1
+            return
+        if self.skip_depth:
+            return
+        if tag in self.UNWRAP_TAGS or (tag == "img" and self.omit_images):
+            if tag in self.BLOCK_TAGS:
+                self._newline()
+            return
+        self.parts.append(f"</{tag}>")
+        if tag in self.BLOCK_TAGS:
+            self._newline()
+
+    def handle_data(self, data: str) -> None:
+        if self.skip_depth:
+            return
+        pieces = data.split("\ufffc")
+        for index, piece in enumerate(pieces):
+            if index:
+                self.parts.append("<br />")
+                self._newline()
+            self.parts.append(piece)
+
+    def _newline(self) -> None:
+        if not self.parts or not self.parts[-1].endswith("\n"):
+            self.parts.append("\n")
+
+    def _format_attrs(self, attrs: list[tuple[str, str | None]]) -> str:
+        kept = []
+        for name, value in attrs:
+            if name.lower() not in self.KEEP_ATTRS or value is None:
+                continue
+            escaped = value.replace("&", "&amp;").replace('"', "&quot;")
+            kept.append(f'{name}="{escaped}"')
+        return f" {' '.join(kept)}" if kept else ""
+
+    def cleaned_html(self) -> str:
+        text = "".join(self.parts)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip() + "\n"
+
+
+def clean_onenote_html_for_text(html: str, *, omit_images: bool = True) -> str:
+    cleaner = OneNoteHtmlCleaner(omit_images=omit_images)
+    cleaner.feed(html)
+    cleaner.close()
+    return cleaner.cleaned_html()
+
+
+def output_path_for_format(output_base: Path, extension: str) -> Path:
+    return Path(f"{output_base}.{extension.lstrip('.')}")
+
+
+def clean_converted_text(text: str) -> str:
+    lines: list[str] = []
+    for raw_line in text.replace("\ufffc", "").splitlines():
+        line = raw_line.rstrip()
+        if line == "\\":
+            if lines and lines[-1] != "":
+                lines.append("")
+            continue
+        if line.endswith("\\"):
+            line = line[:-1].rstrip()
+        lines.append(line)
+    cleaned = "\n".join(lines)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.rstrip() + "\n"
+
+
+def convert_with_pandoc(
+    html_path: Path,
+    output_base: Path,
+    formats: list[str],
+    *,
+    omit_images: bool = True,
+) -> None:
     if not formats:
         return
 
@@ -512,10 +646,21 @@ def convert_with_pandoc(html_path: Path, output_base: Path, formats: list[str]) 
         )
         return
 
+    source_path = html_path
+    cleaned_path: Path | None = None
+    if any(fmt in {"md", "txt", "rtf"} for fmt in formats):
+        cleaned_path = output_path_for_format(output_base, "cleaned.html")
+        cleaned_html = clean_onenote_html_for_text(
+            html_path.read_text(encoding="utf-8"),
+            omit_images=omit_images,
+        )
+        cleaned_path.write_text(cleaned_html, encoding="utf-8")
+        source_path = cleaned_path
+
     for fmt in formats:
-        out_path = output_base.with_suffix(f".{fmt}")
+        out_path = output_path_for_format(output_base, fmt)
         result = subprocess.run(
-            [pandoc, str(html_path), "-f", "html", "-t", PANDOC_TARGETS[fmt], "-o", str(out_path)],
+            [pandoc, str(source_path), "-f", "html", "-t", PANDOC_TARGETS[fmt], "-o", str(out_path)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -524,6 +669,13 @@ def convert_with_pandoc(html_path: Path, output_base: Path, formats: list[str]) 
         if result.returncode != 0:
             print(f"pandoc failed for {html_path.name} -> {fmt}")
             print(result.stderr[:1000])
+        elif fmt in {"md", "txt"}:
+            out_path.write_text(
+                clean_converted_text(out_path.read_text(encoding="utf-8")),
+                encoding="utf-8",
+            )
+    if cleaned_path:
+        cleaned_path.unlink(missing_ok=True)
 
 
 def page_content_url(location: str, page: dict[str, Any], include_ids: bool) -> tuple[str, dict[str, str] | None]:
@@ -543,16 +695,17 @@ def export_page(
     output_dir: Path,
     formats: list[str],
     include_ids: bool,
+    include_image_links: bool = False,
 ) -> dict[str, str]:
     title = page.get("title") or "Untitled page"
     page_id = page["id"]
     short_id = re.sub(r"\W+", "", page_id)[-10:] or "page"
     output_base = output_dir / f"{safe_name(title)}-{short_id}"
-    html_path = output_base.with_suffix(".html")
+    html_path = output_path_for_format(output_base, "html")
 
     url, params = page_content_url(location, page, include_ids)
     html_path.write_bytes(client.bytes(url, params=params))
-    convert_with_pandoc(html_path, output_base, formats)
+    convert_with_pandoc(html_path, output_base, formats, omit_images=not include_image_links)
 
     return {
         "title": title,
@@ -570,6 +723,7 @@ def export_notebooks(
     notebook_filter: str | None,
     formats: list[str],
     include_ids: bool,
+    include_image_links: bool = False,
 ) -> int:
     all_notebooks = client.list_notebooks(location)
     notebooks = all_notebooks
@@ -626,6 +780,7 @@ def export_notebooks(
                     output_dir=section_dir,
                     formats=formats,
                     include_ids=include_ids,
+                    include_image_links=include_image_links,
                 )
                 record["notebook"] = notebook_name
                 record["section"] = section_path
@@ -724,6 +879,7 @@ def main(
             notebook_filter=args.notebook,
             formats=formats,
             include_ids=args.include_ids,
+            include_image_links=args.include_image_links,
         )
         return 0
     except MissingDependencyError as exc:
