@@ -730,6 +730,33 @@ class CliTests(unittest.TestCase):
             ],
         )
 
+    def test_main_rejects_sharepoint_url_in_site_id_before_login(self) -> None:
+        token_provider = Mock(return_value="token")
+        stderr = io.StringIO()
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(export_onenote, "load_dotenv", return_value=False),
+            patch("sys.stderr", stderr),
+        ):
+            exit_code = export_onenote.main(
+                [
+                    "--client-id",
+                    "abc",
+                    "--site-id",
+                    "https://school.sharepoint.com/sites/Section_123/_layouts/15/Doc.aspx?sourcedoc={abc}",
+                ],
+                token_provider=token_provider,
+            )
+
+        self.assertEqual(exit_code, 1)
+        token_provider.assert_not_called()
+        self.assertEqual(
+            stderr.getvalue(),
+            "--site-id expects a resolved Graph site ID like "
+            "hostname,siteCollectionGuid,webGuid. Use --site-url for SharePoint URLs.\n",
+        )
+
     def test_main_rejects_invalid_site_url_cleanly(self) -> None:
         stderr = io.StringIO()
         with (

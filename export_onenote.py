@@ -877,13 +877,6 @@ def main(
 
     try:
         formats = parse_formats(args.formats)
-        token = token_provider(
-            client_id=args.client_id,
-            tenant_id=args.tenant_id,
-            scopes=DEFAULT_SCOPES,
-            cache_path=Path(args.cache),
-        )
-        client = client_factory(token)
         if args.site_id:
             location = site_id_to_site_location(args.site_id)
             site_id_value = location[len("/sites/") :]
@@ -891,6 +884,14 @@ def main(
         else:
             location = "/me"
             export_command_base = "python main.py"
+
+        token = token_provider(
+            client_id=args.client_id,
+            tenant_id=args.tenant_id,
+            scopes=DEFAULT_SCOPES,
+            cache_path=Path(args.cache),
+        )
+        client = client_factory(token)
 
         if args.list:
             print_notebooks(client, location, export_command_base=export_command_base)
