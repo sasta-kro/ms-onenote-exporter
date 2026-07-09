@@ -202,6 +202,35 @@ def shell_double_quote(value: str) -> str:
     return f'"{escaped}"'
 
 
+def site_url_next_flag(*, list_notebooks: bool, notebook: str | None) -> str:
+    if notebook:
+        return f"--notebook {shell_double_quote(notebook)}"
+    if list_notebooks:
+        return "--list"
+    return "--list"
+
+
+def site_id_from_guids(helper: SharePointSiteIdHelperUrls, site_guid: str, web_guid: str) -> str:
+    return helper.site_id_template.replace("SITE_GUID", site_guid).replace("WEB_GUID", web_guid)
+
+
+def print_detected_sharepoint_site(helper: SharePointSiteIdHelperUrls, *, boxed: bool) -> None:
+    print("")
+    print(section_heading("Detected notebook storage site (for checking only)"))
+    print("This is the Teams/SharePoint site that stores the notebook file. You usually do not need to open it.")
+    if boxed:
+        print(ascii_box([helper.site_root]))
+    else:
+        print(helper.site_root)
+
+
+def print_guid_helper_link(step: int, label: str, url: str) -> None:
+    print("")
+    print(section_heading(f"Step {step} ({label}): open this in your signed-in browser"))
+    print("")
+    print(ascii_box([url]))
+
+
 def extract_sharepoint_guid(pasted_text: str, label: str) -> str:
     match = GUID_PATTERN.search(pasted_text)
     if match:
@@ -255,30 +284,16 @@ def prompt_for_site_id_from_site_url(
     notebook: str | None = None,
 ) -> str:
     helper = sharepoint_url_to_site_id_helper_urls(site_url)
-    if notebook:
-        next_flag = f"--notebook {shell_double_quote(notebook)}"
-    elif list_notebooks:
-        next_flag = "--list"
-    else:
-        next_flag = "--list"
+    next_flag = site_url_next_flag(list_notebooks=list_notebooks, notebook=notebook)
 
-    print("")
-    print(section_heading("Detected notebook storage site (for checking only)"))
-    print("This is the Teams/SharePoint site that stores the notebook file. You usually do not need to open it.")
-    print(helper.site_root)
-    print("")
-    print(section_heading("Step 1 (SITE_GUID): open this in your signed-in browser"))
-    print("")
-    print(ascii_box([helper.site_id_url]))
+    print_detected_sharepoint_site(helper, boxed=False)
+    print_guid_helper_link(1, "SITE_GUID", helper.site_id_url)
     site_guid = read_pasted_guid("SITE_GUID", input_stream)
-    print("")
-    print(section_heading("Step 2 (WEB_GUID): open this in your signed-in browser"))
-    print("")
-    print(ascii_box([helper.web_id_url]))
+    print_guid_helper_link(2, "WEB_GUID", helper.web_id_url)
     web_guid = read_pasted_guid("WEB_GUID", input_stream)
     validate_distinct_sharepoint_guids(site_guid, web_guid)
 
-    site_id = helper.site_id_template.replace("SITE_GUID", site_guid).replace("WEB_GUID", web_guid)
+    site_id = site_id_from_guids(helper, site_guid, web_guid)
     print("")
     print(section_heading("Resolved site ID"))
     print(ascii_box([site_id]))
@@ -292,25 +307,11 @@ def prompt_for_site_id_from_site_url(
 
 def print_site_id_helper(site_url: str, *, list_notebooks: bool = False, notebook: str | None = None) -> None:
     helper = sharepoint_url_to_site_id_helper_urls(site_url)
-    if notebook:
-        next_flag = f"--notebook {shell_double_quote(notebook)}"
-    elif list_notebooks:
-        next_flag = "--list"
-    else:
-        next_flag = "--list"
+    next_flag = site_url_next_flag(list_notebooks=list_notebooks, notebook=notebook)
 
-    print("")
-    print(section_heading("Detected notebook storage site (for checking only)"))
-    print("This is the Teams/SharePoint site that stores the notebook file. You usually do not need to open it.")
-    print(ascii_box([helper.site_root]))
-    print("")
-    print(section_heading("Step 1 (SITE_GUID): open this in your signed-in browser"))
-    print("")
-    print(ascii_box([helper.site_id_url]))
-    print("")
-    print(section_heading("Step 2 (WEB_GUID): open this in your signed-in browser"))
-    print("")
-    print(ascii_box([helper.web_id_url]))
+    print_detected_sharepoint_site(helper, boxed=True)
+    print_guid_helper_link(1, "SITE_GUID", helper.site_id_url)
+    print_guid_helper_link(2, "WEB_GUID", helper.web_id_url)
     print("")
     print(section_heading("Step 3: copy the two GUID values, then run"))
     print("")

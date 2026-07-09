@@ -112,6 +112,20 @@ class PaginationTests(unittest.TestCase):
 
 
 class SharePointUrlTests(unittest.TestCase):
+    def test_site_url_next_flag_prefers_notebook_then_list(self) -> None:
+        self.assertEqual(
+            export_onenote.site_url_next_flag(list_notebooks=False, notebook="Course Notes"),
+            '--notebook "Course Notes"',
+        )
+        self.assertEqual(
+            export_onenote.site_url_next_flag(list_notebooks=True, notebook=None),
+            "--list",
+        )
+        self.assertEqual(
+            export_onenote.site_url_next_flag(list_notebooks=False, notebook=None),
+            "--list",
+        )
+
     def test_sharepoint_url_to_site_id_helper_urls_supports_doc_links(self) -> None:
         url = (
             "https://school.sharepoint.com/sites/Section_123/_layouts/15/Doc.aspx"
