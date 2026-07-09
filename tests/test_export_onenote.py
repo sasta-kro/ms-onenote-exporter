@@ -91,7 +91,7 @@ class CliHeadingTests(unittest.TestCase):
         self.assertIn(
             export_onenote.info_box(
                 [
-                    "After pasting the XML text, press Return/Enter once to continue.",
+                    "After pasting the XML text, press Return/Enter to continue.",
                 ]
             ),
             [call.args[0] for call in print_mock.call_args_list],
@@ -551,6 +551,19 @@ class CliTests(unittest.TestCase):
         self.assertEqual(args.tenant_id, "organizations")
         self.assertEqual(args.formats, "")
 
+    def test_resolve_tenant_id_uses_au_tenant_for_preset_app(self) -> None:
+        self.assertEqual(
+            export_onenote.resolve_tenant_id(
+                export_onenote.ASSUMPTION_UNIVERSITY_CLIENT_ID,
+                "organizations",
+            ),
+            export_onenote.ASSUMPTION_UNIVERSITY_TENANT_ID,
+        )
+        self.assertEqual(
+            export_onenote.resolve_tenant_id("abc", "organizations"),
+            "organizations",
+        )
+
     def test_parse_formats_treats_html_as_implicit_noop(self) -> None:
         self.assertEqual(export_onenote.parse_formats("html"), [])
         self.assertEqual(export_onenote.parse_formats("html,md,rtf"), ["md", "rtf"])
@@ -705,7 +718,9 @@ class CliTests(unittest.TestCase):
                 export_onenote.error_box(
                     ["[ERROR] Microsoft login did not receive tenant-identifying information."]
                 ),
-                "[RECOMMENDATION] Set ONENOTE_TENANT_ID=organizations in .env, or use your Directory (tenant) ID.",
+                "[RECOMMENDATION] For the Assumption University preset app, set "
+                f"ONENOTE_TENANT_ID={export_onenote.ASSUMPTION_UNIVERSITY_TENANT_ID} in .env.",
+                "[RECOMMENDATION] After changing .env, delete .msal_token_cache.json and run the command again.",
                 "[INFO] Original error: AADSTS50059",
             ],
         )
@@ -759,6 +774,36 @@ class CliTests(unittest.TestCase):
         client.list_notebooks.assert_called_once_with("/me")
         self.assertTrue(
             any("Course Notes" in str(call.args[0]) for call in print_mock.call_args_list)
+        )
+
+    def test_main_resolves_au_preset_app_to_au_tenant(self) -> None:
+        token_provider = Mock(return_value="token")
+        client = Mock()
+        client.list_notebooks.return_value = []
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(export_onenote, "load_dotenv", return_value=False),
+            patch("builtins.print"),
+        ):
+            exit_code = export_onenote.main(
+                [
+                    "--client-id",
+                    export_onenote.ASSUMPTION_UNIVERSITY_CLIENT_ID,
+                    "--tenant-id",
+                    "organizations",
+                    "--list",
+                ],
+                token_provider=token_provider,
+                client_factory=lambda token: client,
+            )
+
+        self.assertEqual(exit_code, 0)
+        token_provider.assert_called_once_with(
+            client_id=export_onenote.ASSUMPTION_UNIVERSITY_CLIENT_ID,
+            tenant_id=export_onenote.ASSUMPTION_UNIVERSITY_TENANT_ID,
+            scopes=["Notes.Read.All"],
+            cache_path=Path(".msal_token_cache.json"),
         )
 
     def test_main_prints_site_id_helper_for_site_url_when_not_interactive(self) -> None:

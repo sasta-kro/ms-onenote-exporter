@@ -18,6 +18,8 @@ from urllib.parse import quote, unquote, urlparse
 
 GRAPH_ROOT = "https://graph.microsoft.com/v1.0"
 DEFAULT_SCOPES = ["Notes.Read.All"]
+ASSUMPTION_UNIVERSITY_CLIENT_ID = "43e0fa96-05a2-4479-ae9c-7d88e22cf6d7"
+ASSUMPTION_UNIVERSITY_TENANT_ID = "c1f3dc23-b7f8-48d3-9b5d-2b12f158f01f"
 SECTION_HEADING_DECORATION_TEXT = ">>>>> {text}"
 COPY_BLOCK_INDENT = "    "
 INFO_BOX_TOP_LEFT = "╭"
@@ -125,8 +127,9 @@ def log_runtime_error(error: RuntimeError) -> None:
     if "AADSTS50059" in message:
         log_error("Microsoft login did not receive tenant-identifying information.")
         log_recommendation(
-            "Set ONENOTE_TENANT_ID=organizations in .env, or use your Directory (tenant) ID."
+            f"For the Assumption University preset app, set ONENOTE_TENANT_ID={ASSUMPTION_UNIVERSITY_TENANT_ID} in .env."
         )
+        log_recommendation("After changing .env, delete .msal_token_cache.json and run the command again.")
         log_info("Original error: AADSTS50059")
         return
     print(message, file=sys.stderr)
@@ -447,6 +450,16 @@ def parse_args(argv: list[str] | None = None, env_file: Path | None = Path(".env
         help="Keep Graph image URLs in converted md/txt/rtf output. Default omits them.",
     )
     return parser.parse_args(argv)
+
+
+def resolve_tenant_id(client_id: str, tenant_id: str) -> str:
+    tenant = tenant_id.strip()
+    if client_id.strip().lower() == ASSUMPTION_UNIVERSITY_CLIENT_ID and tenant.lower() in {
+        "organizations",
+        "common",
+    }:
+        return ASSUMPTION_UNIVERSITY_TENANT_ID
+    return tenant
 
 
 def normalize_location(location: str) -> str:
@@ -1084,7 +1097,7 @@ def main(
 
         token = token_provider(
             client_id=args.client_id,
-            tenant_id=args.tenant_id,
+            tenant_id=resolve_tenant_id(args.client_id, args.tenant_id),
             scopes=DEFAULT_SCOPES,
             cache_path=Path(args.cache),
         )

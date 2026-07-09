@@ -107,9 +107,9 @@ Example terminal shape:
 ╰───────────────────────────────────────────────────────────────╯
 
 >>>>> Paste SITE_GUID page text
-╭──────────────────────────────────────────────────────────────────╮
-│ After pasting the XML text, press Return/Enter once to continue. │
-╰──────────────────────────────────────────────────────────────────╯
+╭─────────────────────────────────────────────────────────────╮
+│ After pasting the XML text, press Return/Enter to continue. │
+╰─────────────────────────────────────────────────────────────╯
 >
 ```
 
@@ -342,11 +342,14 @@ rm .msal_token_cache.json
 If `--list` shows no notebooks, the notebook may be stored under a Teams or
 SharePoint site. Try the Teams/Class Notebook flow with `--site-url`.
 
-If Microsoft returns `AADSTS50059`, keep this value in `.env`:
+If Microsoft returns `AADSTS50059`, Microsoft did not receive the school
+tenant value during login. Keep this Assumption University value in `.env`:
 
 ```text
-ONENOTE_TENANT_ID=organizations
+ONENOTE_TENANT_ID=c1f3dc23-b7f8-48d3-9b5d-2b12f158f01f
 ```
+
+Then delete `.msal_token_cache.json` and run the command again.
 
 If Microsoft says admin approval is required, the Microsoft tenant may block
 user consent for the requested permission. The normal setup only asks for
