@@ -84,10 +84,14 @@ class CliHeadingTests(unittest.TestCase):
             '<d:Id m:type="Edm.Guid">80a26a44-cf5b-42b2-bf61-c3a021fa18c7</d:Id>\n'
         )
 
-        with patch("builtins.print") as print_mock:
+        with (
+            patch("builtins.print") as print_mock,
+            patch.object(export_onenote.time, "sleep") as sleep_mock,
+        ):
             result = export_onenote.read_pasted_guid("SITE_GUID", stdin)
 
         self.assertEqual(result, "80a26a44-cf5b-42b2-bf61-c3a021fa18c7")
+        sleep_mock.assert_called_once_with(0.5)
         self.assertIn(
             export_onenote.info_box(
                 [
@@ -103,10 +107,14 @@ class CliHeadingTests(unittest.TestCase):
             '<d:Id m:type="Edm.Guid">5dbbcfdd-641d-42ed-b89a-2cb2451897ef</d:Id>\n'
         )
 
-        with patch("builtins.print"):
+        with (
+            patch("builtins.print"),
+            patch.object(export_onenote.time, "sleep") as sleep_mock,
+        ):
             result = export_onenote.read_pasted_guid("WEB_GUID", stdin)
 
         self.assertEqual(result, "5dbbcfdd-641d-42ed-b89a-2cb2451897ef")
+        sleep_mock.assert_called_once_with(0.5)
 
 
 class PaginationTests(unittest.TestCase):

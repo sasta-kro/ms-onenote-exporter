@@ -309,9 +309,17 @@ def read_pasted_guid(label: str, input_stream: Any = sys.stdin) -> str:
         lines.append(line)
         pasted_text = "".join(lines)
         if GUID_PATTERN.search(pasted_text) or "</m:error>" in pasted_text or "</d:Id>" in pasted_text:
-            return extract_sharepoint_guid(pasted_text, label)
+            guid = extract_sharepoint_guid(pasted_text, label)
+            # IMPORTANT: This tiny UX pause makes the transition from Step 1 to Step 2 visible.
+            # Without it, both prompts look so similar that the terminal can appear unchanged.
+            time.sleep(0.5)
+            return guid
 
-    return extract_sharepoint_guid("".join(lines), label)
+    guid = extract_sharepoint_guid("".join(lines), label)
+    # IMPORTANT: This tiny UX pause makes the transition from Step 1 to Step 2 visible.
+    # Without it, both prompts look so similar that the terminal can appear unchanged.
+    time.sleep(0.5)
+    return guid
 
 
 def prompt_for_site_id_from_site_url(
