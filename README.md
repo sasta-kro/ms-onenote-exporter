@@ -36,24 +36,10 @@ python -m pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Open `.env` and check the Microsoft Entra application/client ID:
+For Assumption University students, `.env.example` already contains the shared
+Microsoft app settings. No Entra app registration setup is needed.
 
-```text
-ONENOTE_CLIENT_ID=43e0fa96-05a2-4479-ae9c-7d88e22cf6d7
-ONENOTE_TENANT_ID=organizations
-```
-
-If someone in the same organization already registered the app, a new app
-registration is not needed. Use the existing `ONENOTE_CLIENT_ID` value.
-
-If no app registration exists yet, follow the detailed setup in
-[Microsoft App Setup](#microsoft-app-setup).
-
-The client ID is not a student ID, email address, tenant ID, or SharePoint ID.
-Do not paste `Directory (tenant) ID` into `ONENOTE_CLIENT_ID`.
-
-After `.env` is ready, list notebooks visible from the signed-in OneNote
-account:
+After setup, list notebooks visible from the signed-in OneNote account:
 
 ```bash
 python main.py --list
@@ -240,56 +226,21 @@ Image URLs are omitted from converted text formats by default.
 Some OneNote pages are screenshots or pasted images. Markdown and TXT cannot
 extract text from images. OCR is not included.
 
-## Portable `.env` Setup
+## Optional `.env` Settings
 
 The app reads `.env` automatically. CLI flags override `.env`, and real shell
 environment variables override `.env` too.
 
-Common `.env` values:
+For Assumption University students, the default auth values in `.env.example`
+are already set. The values below are optional settings for repeated use.
 
 ```text
-ONENOTE_CLIENT_ID=43e0fa96-05a2-4479-ae9c-7d88e22cf6d7
-ONENOTE_TENANT_ID=organizations
 ONENOTE_SITE_ID=school.sharepoint.com,siteCollectionGuid,webGuid
 ONENOTE_OUT=onenote_export
 ONENOTE_FORMATS=
 ONENOTE_NOTEBOOK=2026-1 BAD 542 Notebook
 ONENOTE_TOKEN_CACHE=.msal_token_cache.json
 ```
-
-### `ONENOTE_CLIENT_ID`
-
-Required. This comes from the Microsoft Entra app registration.
-
-Path:
-
-```text
-Microsoft Entra admin center
-Identity -> Applications -> App registrations
-App Overview -> Application (client) ID
-```
-
-Portal: [https://entra.microsoft.com/](https://entra.microsoft.com/)
-
-Official guide: [Register an application with the Microsoft identity platform](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app)
-
-### `ONENOTE_TENANT_ID`
-
-Default:
-
-```text
-ONENOTE_TENANT_ID=organizations
-```
-
-`organizations` means Microsoft work or school accounts. This is the normal
-choice for university and company notebooks.
-
-Other valid values:
-
-- A Directory tenant GUID.
-- A tenant domain, for example `school.edu`.
-- `common`, for personal Microsoft accounts and work/school accounts.
-- `consumers`, for personal Microsoft accounts only.
 
 ### `ONENOTE_SITE_ID`
 
@@ -345,53 +296,6 @@ brew install pandoc
 
 Pandoc is only needed for Markdown, TXT, and RTF conversion.
 
-## Microsoft App Setup
-
-The Microsoft Entra app registration needs:
-
-- Supported account type: single tenant for the school or work organization.
-- Public client/device-code flow enabled.
-- Delegated Microsoft Graph permission: `Notes.Read.All`.
-- No client secret.
-
-The app uses device-code login. It does not need a password inside `.env`.
-
-One app registration can be reused by other people in the same organization.
-They do not need to create a new app registration. Share the same
-`ONENOTE_CLIENT_ID` value and keep `ONENOTE_TENANT_ID=organizations`.
-
-The app may still ask each account for permission on first login. If the
-organization blocks user consent, Microsoft shows an admin approval screen. In
-that case, an admin must approve the app or the export cannot continue with
-Microsoft Graph.
-
-App registration steps:
-
-1. Open [Microsoft Entra admin center](https://entra.microsoft.com/).
-2. Select the correct school or work tenant from the top menu if more than one
-   tenant exists.
-3. Go to `Identity -> Applications -> App registrations`.
-4. Press `New registration`.
-5. Enter a name, for example `OneNote Downloader`.
-6. Under supported account types, choose the single-tenant option for the
-   current organization.
-7. Leave redirect URI empty for this CLI tool.
-8. Press `Register`.
-9. Copy `Application (client) ID` from the Overview page.
-10. Open `Authentication`.
-11. Enable public client/device-code flow, then save.
-12. Open `API permissions`.
-13. Press `Add a permission`.
-14. Choose `Microsoft Graph`.
-15. Choose `Delegated permissions`.
-16. Search for `Notes.Read.All`.
-17. Add the permission.
-18. If Microsoft shows admin approval later, the tenant blocks normal user
-    consent for this permission.
-
-Official Microsoft guide:
-[Register an application with the Microsoft identity platform](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app)
-
 ## Token Cache
 
 The app stores Microsoft login tokens in:
@@ -428,6 +332,21 @@ install Pandoc or leave `ONENOTE_FORMATS` blank for HTML-only export.
 
 If the same GUID is pasted for both SharePoint helper steps, open the second
 helper link again. Step 1 and Step 2 must return different GUID values.
+
+## Use Outside Assumption University
+
+The preset `ONENOTE_CLIENT_ID` is meant for Assumption University students. For
+another school, company, or personal Microsoft tenant, create a separate
+Microsoft Entra app registration and replace `ONENOTE_CLIENT_ID` in `.env`.
+
+The app registration needs:
+
+- Public client/device-code flow enabled.
+- Delegated Microsoft Graph permission: `Notes.Read.All`.
+- No client secret.
+
+Microsoft guide:
+[Register an application with the Microsoft identity platform](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app)
 
 ## Development
 
