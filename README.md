@@ -1,11 +1,9 @@
 # MS OneNote Scraper
 
-## Short Version
-
 MS OneNote Scraper downloads readable Microsoft OneNote notebooks into local
 files.
 
-It is mainly made for students who can see shared class notebooks in Teams, but
+It is mainly made for AU students who can see shared class notebooks in Teams, but
 cannot find a clean bulk download button.
 
 ## Main Use Case
@@ -23,31 +21,32 @@ HTML is the safest default because it keeps more of the original OneNote page
 layout than plain text.
 
 Optional extra formats:
-
 - Markdown
 - TXT
 - RTF
 
-Markdown, TXT, and RTF need Pandoc.
+Markdown, TXT, and RTF need Pandoc installed (`brew install pandoc`).
 
-## What It Can Read
+## Scope
+
+What it can read:
 
 - Teams/Class Notebook pages stored in SharePoint.
 - Notebooks visible from the signed-in OneNote account.
 - Sections, section groups, and pages.
 
-## What It Creates
+What it creates:
 
 - One folder per notebook.
 - HTML files for every page.
 - Optional Markdown, TXT, and RTF copies.
 - One `manifest.json` file per notebook.
 
-## What It Is Not
-
 This is not an admin backup tool. It does not download every notebook in an
 organization. It only exports notebooks visible to the signed-in Microsoft
 account.
+
+___
 
 ## Quick Start
 
@@ -72,6 +71,8 @@ python main.py --list
 On the first run, Microsoft prints a browser login link and a device code in the
 terminal. Open the link, paste the code shown in the terminal, and finish the
 Microsoft login page. The code is not in Teams or OneNote.
+
+___
 
 ## Example Flow: Export a Teams Class Notebook
 
