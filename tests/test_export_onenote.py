@@ -387,7 +387,7 @@ class ExportNotebookTests(unittest.TestCase):
 
         self.assertIn('<img src="https://graph.microsoft.com/v1.0/resource/$value">', result)
 
-    def test_convert_with_pandoc_uses_cleaned_html_for_markdown_by_default(self) -> None:
+    def test_convert_html_formats_writes_markdown_without_pandoc(self) -> None:
         html = """
         <html><body>
           <div style="position:absolute;left:48px;top:115px;width:720px">
@@ -402,7 +402,8 @@ class ExportNotebookTests(unittest.TestCase):
             html_path = Path(f"{output_base}.html")
             html_path.write_text(html, encoding="utf-8")
 
-            export_onenote.convert_with_pandoc(html_path, output_base, ["md"])
+            with patch.object(export_onenote.shutil, "which", return_value=None):
+                export_onenote.convert_html_formats(html_path, output_base, ["md"])
 
             markdown = Path(f"{output_base}.md").read_text(encoding="utf-8")
 
@@ -412,7 +413,25 @@ class ExportNotebookTests(unittest.TestCase):
         self.assertNotIn("<span", markdown)
         self.assertNotIn("graph.microsoft.com", markdown)
 
-    def test_convert_with_pandoc_removes_cleaned_html_when_pandoc_raises(self) -> None:
+    def test_convert_html_formats_writes_txt_without_pandoc(self) -> None:
+        html = "<html><body><h1>Title</h1><p>Alpha <b>beta</b>.</p></body></html>"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_base = Path(tmpdir) / "sample"
+            html_path = Path(f"{output_base}.html")
+            html_path.write_text(html, encoding="utf-8")
+
+            with patch.object(export_onenote.shutil, "which", return_value=None):
+                export_onenote.convert_html_formats(html_path, output_base, ["txt"])
+
+            text = Path(f"{output_base}.txt").read_text(encoding="utf-8")
+
+        self.assertIn("Title", text)
+        self.assertIn("Alpha beta.", text)
+        self.assertNotIn("<h1>", text)
+        self.assertNotIn("<p>", text)
+
+    def test_convert_html_formats_removes_cleaned_html_when_pandoc_raises(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_base = Path(tmpdir) / "sample"
             html_path = Path(f"{output_base}.html")
@@ -424,7 +443,7 @@ class ExportNotebookTests(unittest.TestCase):
                 patch.object(export_onenote.subprocess, "run", side_effect=RuntimeError("boom")),
                 self.assertRaises(RuntimeError),
             ):
-                export_onenote.convert_with_pandoc(html_path, output_base, ["md"])
+                export_onenote.convert_html_formats(html_path, output_base, ["md"])
 
             self.assertFalse(cleaned_path.exists())
 
@@ -595,7 +614,11 @@ class CliTests(unittest.TestCase):
 
     def test_parse_formats_treats_html_as_implicit_noop(self) -> None:
         self.assertEqual(export_onenote.parse_formats("html"), [])
-        self.assertEqual(export_onenote.parse_formats("html,md,rtf"), ["md", "rtf"])
+        self.assertEqual(export_onenote.parse_formats("html,md,txt"), ["md", "txt"])
+
+    def test_parse_formats_rejects_rtf(self) -> None:
+        with self.assertRaises(argparse.ArgumentTypeError):
+            export_onenote.parse_formats("rtf")
 
     def test_parse_args_accepts_site_url(self) -> None:
         args = export_onenote.parse_args(
@@ -1032,12 +1055,7 @@ class CliTests(unittest.TestCase):
             ),
             [call.args[0] for call in print_mock.call_args_list],
         )
-        self.assertIn(
-            export_onenote.copy_block(
-                'python main.py --site-id "school.sharepoint.com,80a26a44-cf5b-42b2-bf61-c3a021fa18c7,5dbbcfdd-641d-42ed-b89a-2cb2451897ef" --notebook "2026-1 BAD 542 Notebook" --formats rtf'
-            ),
-            [call.args[0] for call in print_mock.call_args_list],
-        )
+        self.assertNotIn("--formats rtf", "\n".join(str(call.args[0]) for call in print_mock.call_args_list))
         self.assertIn(
             export_onenote.copy_block(
                 'python main.py --site-id "school.sharepoint.com,80a26a44-cf5b-42b2-bf61-c3a021fa18c7,5dbbcfdd-641d-42ed-b89a-2cb2451897ef" --notebook "2026-1 BAD 542 Notebook" --formats txt'

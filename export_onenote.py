@@ -35,8 +35,8 @@ GUID_PATTERN = re.compile(
 PANDOC_TARGETS = {
     "md": "gfm",
     "txt": "plain",
-    "rtf": "rtf",
 }
+BUILTIN_CONVERTER_NOTICE_PRINTED = False
 
 
 class GraphError(RuntimeError):
@@ -172,7 +172,7 @@ def parse_formats(value: str) -> list[str]:
     unsupported = sorted(set(formats) - set(PANDOC_TARGETS))
     if unsupported:
         raise argparse.ArgumentTypeError(
-            f"unsupported format(s): {', '.join(unsupported)}. Use html, md, txt, rtf, or ''."
+            f"unsupported format(s): {', '.join(unsupported)}. Use html, md, txt, or ''."
         )
     return formats
 
@@ -441,7 +441,7 @@ def parse_args(argv: list[str] | None = None, env_file: Path | None = Path(".env
     parser.add_argument(
         "--formats",
         default=env_value("ONENOTE_FORMATS", ""),
-        help="Optional comma-separated formats: html,md,txt,rtf. HTML is always exported.",
+        help="Optional comma-separated formats: html,md,txt. HTML is always exported.",
     )
     parser.add_argument("--list", action="store_true", help="List notebooks and exit.")
     parser.add_argument(
@@ -452,7 +452,7 @@ def parse_args(argv: list[str] | None = None, env_file: Path | None = Path(".env
     parser.add_argument(
         "--include-image-links",
         action="store_true",
-        help="Keep Graph image URLs in converted md/txt/rtf output. Default omits them.",
+        help="Keep Graph image URLs in converted md/txt output. Default omits them.",
     )
     return parser.parse_args(argv)
 
@@ -760,7 +760,111 @@ def clean_converted_text(text: str) -> str:
     return cleaned.rstrip() + "\n"
 
 
-def convert_with_pandoc(
+class ReadableTextExtractor(HTMLParser):
+    BLOCK_TAGS = OneNoteHtmlCleaner.BLOCK_TAGS
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.skip_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
+        if tag in {"head", "script", "style"}:
+            self.skip_depth += 1
+            return
+        if self.skip_depth:
+            return
+        if tag == "br":
+            self._newline()
+            return
+        if tag == "li":
+            self._block_break()
+            self.parts.append("- ")
+            return
+        if tag == "img":
+            attrs_by_name = {name.lower(): value for name, value in attrs if value}
+            image_label = attrs_by_name.get("alt") or attrs_by_name.get("src")
+            if image_label:
+                self._block_break()
+                self.parts.append(f"[image: {image_label}]")
+                self._newline()
+            return
+        if tag in self.BLOCK_TAGS:
+            self._block_break()
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        if tag in {"head", "script", "style"} and self.skip_depth:
+            self.skip_depth -= 1
+            return
+        if self.skip_depth:
+            return
+        if tag in self.BLOCK_TAGS:
+            self._newline()
+
+    def handle_data(self, data: str) -> None:
+        if self.skip_depth:
+            return
+        data = re.sub(r"\s+", " ", data.replace("\ufffc", ""))
+        self.parts.append(data)
+
+    def _newline(self) -> None:
+        if not self.parts or not self.parts[-1].endswith("\n"):
+            self.parts.append("\n")
+
+    def _block_break(self) -> None:
+        if not self.parts:
+            return
+        text = "".join(self.parts).rstrip()
+        if not text:
+            self.parts = []
+            return
+        if text.endswith("\n\n"):
+            return
+        if text.endswith("\n"):
+            self.parts.append("\n")
+        else:
+            self.parts.append("\n\n")
+
+    def text(self) -> str:
+        return "".join(self.parts)
+
+
+def cleaned_html_to_text(cleaned_html: str) -> str:
+    extractor = ReadableTextExtractor()
+    extractor.feed(cleaned_html)
+    extractor.close()
+
+    lines: list[str] = []
+    for raw_line in extractor.text().splitlines():
+        line = re.sub(r"[ \t]+", " ", raw_line).strip()
+        if line:
+            lines.append(line)
+        elif lines and lines[-1] != "":
+            lines.append("")
+    cleaned = "\n".join(lines)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.rstrip() + "\n"
+
+
+def write_builtin_text_formats(
+    html_path: Path,
+    output_base: Path,
+    formats: list[str],
+    *,
+    omit_images: bool,
+) -> None:
+    cleaned_html = clean_onenote_html_for_text(
+        html_path.read_text(encoding="utf-8"),
+        omit_images=omit_images,
+    )
+    text = cleaned_html_to_text(cleaned_html)
+    for fmt in formats:
+        Path(f"{output_base}.{fmt}").write_text(text, encoding="utf-8")
+
+
+def convert_html_formats(
     html_path: Path,
     output_base: Path,
     formats: list[str],
@@ -772,14 +876,16 @@ def convert_with_pandoc(
 
     pandoc = shutil.which("pandoc")
     if not pandoc:
-        print(
-            "pandoc was not found. HTML was saved, but requested conversions were skipped."
-        )
+        global BUILTIN_CONVERTER_NOTICE_PRINTED
+        if not BUILTIN_CONVERTER_NOTICE_PRINTED:
+            log_info("Pandoc was not found. Using the built-in Markdown/TXT converter.")
+            BUILTIN_CONVERTER_NOTICE_PRINTED = True
+        write_builtin_text_formats(html_path, output_base, formats, omit_images=omit_images)
         return
 
     source_path = html_path
     cleaned_path: Path | None = None
-    if any(fmt in {"md", "txt", "rtf"} for fmt in formats):
+    if any(fmt in PANDOC_TARGETS for fmt in formats):
         cleaned_path = Path(f"{output_base}.cleaned.html")
         cleaned_html = clean_onenote_html_for_text(
             html_path.read_text(encoding="utf-8"),
@@ -836,7 +942,7 @@ def export_page(
 
     url, params = page_content_url(location, page)
     html_path.write_bytes(client.bytes(url, params=params))
-    convert_with_pandoc(html_path, output_base, formats, omit_images=not include_image_links)
+    convert_html_formats(html_path, output_base, formats, omit_images=not include_image_links)
 
     return {
         "title": title,
@@ -986,15 +1092,13 @@ def print_optional_format_commands(export_command_base: str, notebook_name: str)
     print(
         section_heading(
             "It is currently downloaded as HTML files.\n"
-            "If you want to export to Markdown, TXT, or RTF format instead:"
+            "If you want to export to Markdown or TXT format instead:"
         )
     )
     print("")
     print(copy_block(f"{export_command_base} --notebook {shell_double_quote(notebook_name)} --formats md"))
     print("")
     print(copy_block(f"{export_command_base} --notebook {shell_double_quote(notebook_name)} --formats txt"))
-    print("")
-    print(copy_block(f"{export_command_base} --notebook {shell_double_quote(notebook_name)} --formats rtf"))
 
 
 def print_notebooks(client: GraphClient, location: str, export_command_base: str | None = None) -> list[dict[str, Any]]:

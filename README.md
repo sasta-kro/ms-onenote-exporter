@@ -23,9 +23,9 @@ layout than plain text.
 Optional extra formats:
 - Markdown
 - TXT
-- RTF
 
-Markdown, TXT, and RTF need Pandoc installed (`brew install pandoc`).
+Markdown and TXT work without Pandoc. If Pandoc is installed, the app uses it
+for cleaner conversion. Otherwise, the built-in text converter is used.
 
 ## Scope
 
@@ -39,7 +39,7 @@ What it creates:
 
 - One folder per notebook.
 - HTML files for every page.
-- Optional Markdown, TXT, and RTF copies.
+- Optional Markdown and TXT copies.
 - One `manifest.json` file per notebook.
 
 This is not an admin backup tool. It does not download every notebook in an
@@ -146,7 +146,8 @@ ID from those values.
 
 After the notebook is found, the app walks through notebooks, section groups,
 sections, and pages. Each page is downloaded as HTML. Optional formats are made
-from cleaned HTML using Pandoc.
+from cleaned HTML. Pandoc is used when installed. If Pandoc is missing, the app
+falls back to its built-in Markdown/TXT converter.
 
 ## Tech Used
 
@@ -156,7 +157,7 @@ from cleaned HTML using Pandoc.
 - Microsoft Graph OneNote APIs for notebook, section, and page export.
 - SharePoint `_api/site/id` and `_api/web/id` helper endpoints for Teams
   notebook site resolution.
-- Pandoc for optional Markdown, TXT, and RTF conversion.
+- Optional Pandoc support for cleaner Markdown and TXT conversion.
 - `unittest` for the local test suite.
 
 ## Output Folder
@@ -208,7 +209,7 @@ Export HTML plus Markdown and TXT:
 python main.py --formats md,txt --notebook "2026-1 BAD 542 Notebook"
 ```
 
-Keep image links in converted Markdown/TXT/RTF files:
+Keep image links in converted Markdown/TXT files:
 
 ```bash
 python main.py --formats md,txt --include-image-links --notebook "2026-1 BAD 542 Notebook"
@@ -235,18 +236,17 @@ Accepted `--formats` values:
 - `html`: accepted, but no extra file is made because HTML already exists.
 - `md`: Markdown copy.
 - `txt`: plain text copy.
-- `rtf`: rich text copy.
 - `md,txt`: comma-separated values also work.
 
-Markdown, TXT, and RTF conversion needs Pandoc:
+Markdown and TXT conversion works without Pandoc. Pandoc is optional:
 
 ```bash
 brew install pandoc
 ```
 
-Converted files are cleaned before Pandoc runs. The cleaner removes common
-OneNote layout wrappers, raw span noise, and strange placeholder characters.
-Image URLs are omitted from converted text formats by default.
+Converted files are cleaned first. The cleaner removes common OneNote layout
+wrappers, raw span noise, and strange placeholder characters. Image URLs are
+omitted from converted text formats by default.
 
 Some OneNote pages are screenshots or pasted images. Markdown and TXT cannot
 extract text from images. OCR is not included.
@@ -291,8 +291,7 @@ school.sharepoint.com,siteCollectionGuid,webGuid
 
 `ONENOTE_OUT` sets the export folder.
 
-`ONENOTE_FORMATS` sets extra formats, for example `md`, `txt`, `rtf`, or
-`md,txt`.
+`ONENOTE_FORMATS` sets extra formats, for example `md`, `txt`, or `md,txt`.
 
 `ONENOTE_NOTEBOOK` filters notebook names. It can make `python main.py` export
 one known notebook without typing the name each time.
@@ -319,7 +318,8 @@ Optional system dependency:
 brew install pandoc
 ```
 
-Pandoc is only needed for Markdown, TXT, and RTF conversion.
+Pandoc is not required. It is only used when installed for cleaner Markdown and
+TXT conversion.
 
 ## Token Cache
 
@@ -355,8 +355,8 @@ If Microsoft says admin approval is required, the Microsoft tenant may block
 user consent for the requested permission. The normal setup only asks for
 `Notes.Read.All`.
 
-If `.html` files export but `.md`, `.txt`, or `.rtf` files do not appear,
-install Pandoc or leave `ONENOTE_FORMATS` blank for HTML-only export.
+If `.html` files export but `.md` or `.txt` files do not appear, check
+`ONENOTE_FORMATS` or the `--formats` value.
 
 If the same GUID is pasted for both SharePoint helper steps, open the second
 helper link again. Step 1 and Step 2 must return different GUID values.
