@@ -26,6 +26,7 @@ INFO_BOX_BOTTOM_LEFT = "╰"
 INFO_BOX_BOTTOM_RIGHT = "╯"
 INFO_BOX_HORIZONTAL = "─"
 INFO_BOX_VERTICAL = "│"
+ERROR_BOX_TITLE = "[ERROR]"
 GUID_PATTERN = re.compile(
     r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
 )
@@ -47,7 +48,7 @@ class MissingDependencyError(RuntimeError):
 
 
 def log_error(message: str) -> None:
-    print(f"[ERROR] {message}")
+    print(error_box([f"[ERROR] {message}"]))
 
 
 def log_info(message: str) -> None:
@@ -84,6 +85,18 @@ def info_box(lines: list[str]) -> str:
     content = [str(line) for line in lines] or [""]
     width = max(len(line) for line in content)
     top = f"{INFO_BOX_TOP_LEFT}{INFO_BOX_HORIZONTAL * (width + 2)}{INFO_BOX_TOP_RIGHT}"
+    bottom = f"{INFO_BOX_BOTTOM_LEFT}{INFO_BOX_HORIZONTAL * (width + 2)}{INFO_BOX_BOTTOM_RIGHT}"
+    boxed_lines = [top]
+    boxed_lines.extend(f"{INFO_BOX_VERTICAL} {line.ljust(width)} {INFO_BOX_VERTICAL}" for line in content)
+    boxed_lines.append(bottom)
+    return "\n".join(boxed_lines)
+
+
+def error_box(lines: list[str]) -> str:
+    content = [str(line) for line in lines] or [""]
+    title = f"───{ERROR_BOX_TITLE}"
+    width = max(max(len(line) for line in content), len(title) - 1)
+    top = f"{INFO_BOX_TOP_LEFT}{title}{INFO_BOX_HORIZONTAL * (width + 2 - len(title))}{INFO_BOX_TOP_RIGHT}"
     bottom = f"{INFO_BOX_BOTTOM_LEFT}{INFO_BOX_HORIZONTAL * (width + 2)}{INFO_BOX_BOTTOM_RIGHT}"
     boxed_lines = [top]
     boxed_lines.extend(f"{INFO_BOX_VERTICAL} {line.ljust(width)} {INFO_BOX_VERTICAL}" for line in content)
@@ -239,6 +252,16 @@ def extract_sharepoint_guid(pasted_text: str, label: str) -> str:
     match = GUID_PATTERN.search(pasted_text)
     if match:
         return match.group(0).lower()
+    if (
+        "System.UnauthorizedAccessException" in pasted_text
+        or "Attempted to perform an unauthorized operation" in pasted_text
+        or "-2147024891" in pasted_text
+    ):
+        raise ValueError(
+            f"[ERROR] SharePoint denied access to the {label} page.\n"
+            "[RECOMMENDATION] Open the link in a browser signed in with the Assumption "
+            "University Microsoft account, then copy the page text again."
+        )
     if "..." in pasted_text and re.search(r"<[A-Za-z][^>]*>", pasted_text):
         raise ValueError(
             f"[ERROR] {label} was not found in that paste.\n"
@@ -255,8 +278,8 @@ def validate_distinct_sharepoint_guids(site_guid: str, web_guid: str) -> None:
     if site_guid.strip().lower() == web_guid.strip().lower():
         raise ValueError(
             "[ERROR] SITE_GUID and WEB_GUID are identical.\n"
-            "[RECOMMENDATION] You probably pasted the Step 1 SITE_GUID page twice. "
-            "Open the Step 2 WEB_GUID link and paste that page instead."
+            "[RECOMMENDATION] The Step 1 SITE_GUID page was probably pasted twice. "
+            "Open the Step 2 WEB_GUID link, then paste that page instead."
         )
 
 
@@ -891,7 +914,8 @@ def export_one_notebook(
 
 
 def print_export_summary(total_pages: int, output_dir: Path, notebook_outputs: list[NotebookOutput]) -> None:
-    print(f"\nExported {total_pages} page(s).")
+    print("")
+    print(info_box([f"Successfully Exported {total_pages} page(s)."]))
     print(f"Output root: {output_dir}")
     for notebook_output in notebook_outputs:
         print(f"Notebook output: {notebook_output.name}")
@@ -964,6 +988,7 @@ def print_notebooks(client: GraphClient, location: str, export_command_base: str
         print(section_heading("To download one notebook"))
         print("")
         print(copy_block(f"{export_command_base} --notebook {shell_double_quote(first_name)}"))
+        print("\n>>> Auto-download will start soon if only 1 notebook is found.")
     return notebooks
 
 
@@ -1040,8 +1065,7 @@ def main(
     except ValueError as exc:
         message = str(exc)
         if message.startswith("[ERROR]"):
-            for line in message.splitlines():
-                print(line)
+            print(error_box(message.splitlines()))
         else:
             print(message, file=sys.stderr)
         return 1
@@ -1089,7 +1113,11 @@ def main(
         log_missing_dependency(exc)
         return 1
     except (GraphError, ValueError, argparse.ArgumentTypeError) as exc:
-        print(str(exc), file=sys.stderr)
+        message = str(exc)
+        if message.startswith("[ERROR]"):
+            print(error_box(message.splitlines()))
+        else:
+            print(message, file=sys.stderr)
         return 1
     except RuntimeError as exc:
         log_runtime_error(exc)

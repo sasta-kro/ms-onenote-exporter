@@ -65,6 +65,20 @@ class CliHeadingTests(unittest.TestCase):
             ),
         )
 
+    def test_error_box_formats_error_values_with_title_in_border(self) -> None:
+        result = export_onenote.error_box(["[ERROR] SITE_GUID was not found in that paste."])
+
+        self.assertEqual(
+            result,
+            "\n".join(
+                [
+                    "╭───[ERROR]──────────────────────────────────────╮",
+                    "│ [ERROR] SITE_GUID was not found in that paste. │",
+                    "╰────────────────────────────────────────────────╯",
+                ]
+            ),
+        )
+
     def test_read_pasted_guid_boxes_enter_twice_instruction(self) -> None:
         stdin = io.StringIO(
             '<d:Id m:type="Edm.Guid">80a26a44-cf5b-42b2-bf61-c3a021fa18c7</d:Id>\n\n'
@@ -214,6 +228,21 @@ class SharePointUrlTests(unittest.TestCase):
             r"Click the triangle/arrow next to the XML line in the browser to expand it",
         ):
             export_onenote.extract_sharepoint_guid(collapsed_xml, "SITE_GUID")
+
+    def test_extract_sharepoint_guid_explains_unauthorized_xml(self) -> None:
+        unauthorized_xml = (
+            'This XML file does not appear to have any style information associated with it.\n'
+            '<m:error xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata">\n'
+            "<m:code>-2147024891, System.UnauthorizedAccessException</m:code>\n"
+            '<m:message xml:lang="en-US">Attempted to perform an unauthorized operation.</m:message>\n'
+            "</m:error>"
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"Open the link in a browser signed in with the Assumption University Microsoft account",
+        ):
+            export_onenote.extract_sharepoint_guid(unauthorized_xml, "SITE_GUID")
 
 
 class SectionTraversalTests(unittest.TestCase):
@@ -421,7 +450,9 @@ class ExportNotebookTests(unittest.TestCase):
         self.assertEqual(
             [call.args[0] for call in print_mock.call_args_list],
             [
-                "[ERROR] No notebooks matched filter: 2026-1 GDD 542 Notebook",
+                export_onenote.error_box(
+                    ["[ERROR] No notebooks matched filter: 2026-1 GDD 542 Notebook"]
+                ),
                 "[INFO] Notebooks visible at /me:",
                 "  - 2026-1 GDD542 Notebook",
                 "  - Personal Notes",
@@ -610,7 +641,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(
             [call.args[0] for call in print_mock.call_args_list],
             [
-                "[ERROR] Missing Microsoft Entra application/client ID.",
+                export_onenote.error_box(["[ERROR] Missing Microsoft Entra application/client ID."]),
                 "[RECOMMENDATION] Set ONENOTE_CLIENT_ID or pass --client-id.",
             ],
         )
@@ -632,7 +663,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(
             [call.args[0] for call in print_mock.call_args_list],
             [
-                "[ERROR] Missing dependency 'msal' in the active Python interpreter.",
+                export_onenote.error_box(
+                    ["[ERROR] Missing dependency 'msal' in the active Python interpreter."]
+                ),
                 "[INFO] Active Python: /opt/miniforge3/bin/python3",
                 f"[INFO] Project venv Python: {venv_python}",
                 f"[RECOMMENDATION] Run with the project venv Python: {venv_python} main.py",
@@ -658,7 +691,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(
             [call.args[0] for call in print_mock.call_args_list],
             [
-                "[ERROR] Microsoft login did not receive tenant-identifying information.",
+                export_onenote.error_box(
+                    ["[ERROR] Microsoft login did not receive tenant-identifying information."]
+                ),
                 "[RECOMMENDATION] Set ONENOTE_TENANT_ID=organizations in .env, or use your Directory (tenant) ID.",
                 "[INFO] Original error: AADSTS50059",
             ],
@@ -960,11 +995,12 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 1)
         self.assertIn(
-            "[ERROR] SITE_GUID was not found in that paste.",
-            [call.args[0] for call in print_mock.call_args_list],
-        )
-        self.assertIn(
-            "[RECOMMENDATION] Paste the full SharePoint XML page text, including the long value inside <d:Id>...</d:Id>.",
+            export_onenote.error_box(
+                [
+                    "[ERROR] SITE_GUID was not found in that paste.",
+                    "[RECOMMENDATION] Paste the full SharePoint XML page text, including the long value inside <d:Id>...</d:Id>.",
+                ]
+            ),
             [call.args[0] for call in print_mock.call_args_list],
         )
 
@@ -995,12 +1031,51 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 1)
         self.assertIn(
-            "[ERROR] SITE_GUID was not found in that paste.",
+            export_onenote.error_box(
+                [
+                    "[ERROR] SITE_GUID was not found in that paste.",
+                    "[RECOMMENDATION] The pasted XML looks collapsed. Click the triangle/arrow next to "
+                    "the XML line in the browser to expand it, then copy and paste the expanded text.",
+                ]
+            ),
             [call.args[0] for call in print_mock.call_args_list],
         )
+
+    def test_main_explains_unauthorized_interactive_site_url_xml(self) -> None:
+        stdin = FakeInteractiveStdin(
+            'This XML file does not appear to have any style information associated with it.\n'
+            '<m:error xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata">\n'
+            "<m:code>-2147024891, System.UnauthorizedAccessException</m:code>\n"
+            '<m:message xml:lang="en-US">Attempted to perform an unauthorized operation.</m:message>\n'
+            "</m:error>\n\n"
+        )
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(export_onenote, "load_dotenv", return_value=False),
+            patch("builtins.print") as print_mock,
+            patch("sys.stdin", stdin),
+        ):
+            exit_code = export_onenote.main(
+                [
+                    "--client-id",
+                    "abc",
+                    "--site-url",
+                    "https://school.sharepoint.com/teams/2026-GDD-542/Shared%20Documents",
+                    "--list",
+                ],
+                token_provider=Mock(return_value="token"),
+            )
+
+        self.assertEqual(exit_code, 1)
         self.assertIn(
-            "[RECOMMENDATION] The pasted XML looks collapsed. Click the triangle/arrow next to "
-            "the XML line in the browser to expand it, then copy and paste the expanded text.",
+            export_onenote.error_box(
+                [
+                    "[ERROR] SharePoint denied access to the SITE_GUID page.",
+                    "[RECOMMENDATION] Open the link in a browser signed in with the Assumption "
+                    "University Microsoft account, then copy the page text again.",
+                ]
+            ),
             [call.args[0] for call in print_mock.call_args_list],
         )
 
@@ -1039,11 +1114,13 @@ class CliTests(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         token_provider.assert_not_called()
         self.assertIn(
-            "[ERROR] SITE_GUID and WEB_GUID are identical.",
-            [call.args[0] for call in print_mock.call_args_list],
-        )
-        self.assertIn(
-            "[RECOMMENDATION] You probably pasted the Step 1 SITE_GUID page twice. Open the Step 2 WEB_GUID link and paste that page instead.",
+            export_onenote.error_box(
+                [
+                    "[ERROR] SITE_GUID and WEB_GUID are identical.",
+                    "[RECOMMENDATION] The Step 1 SITE_GUID page was probably pasted twice. "
+                    "Open the Step 2 WEB_GUID link, then paste that page instead.",
+                ]
+            ),
             [call.args[0] for call in print_mock.call_args_list],
         )
 
@@ -1094,6 +1171,7 @@ class CliTests(unittest.TestCase):
                 export_onenote.copy_block(
                     'python main.py --site-id "school.sharepoint.com,site-guid,web-guid" --notebook "2026-1 CSX4107(541) Notebook"'
                 ),
+                "\n>>> Auto-download will start soon if only 1 notebook is found.",
             ],
         )
 
