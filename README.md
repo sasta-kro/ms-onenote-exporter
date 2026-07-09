@@ -112,7 +112,7 @@ Example terminal shape:
 ╰─────────────────────────────────────────────────────────────────────────────────────╯
 >
 ```
-
+ 
 The pasted text can be the full browser page text:
 
 ```xml
