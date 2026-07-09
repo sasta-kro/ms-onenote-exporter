@@ -72,16 +72,16 @@ class CliHeadingTests(unittest.TestCase):
             result,
             "\n".join(
                 [
-                    "╭───[ERROR]──────────────────────────────────────╮",
+                    "╭───────────[ERROR]──────────────────────────────╮",
                     "│ [ERROR] SITE_GUID was not found in that paste. │",
                     "╰────────────────────────────────────────────────╯",
                 ]
             ),
         )
 
-    def test_read_pasted_guid_boxes_enter_twice_instruction(self) -> None:
+    def test_read_pasted_guid_accepts_one_enter_after_guid_line(self) -> None:
         stdin = io.StringIO(
-            '<d:Id m:type="Edm.Guid">80a26a44-cf5b-42b2-bf61-c3a021fa18c7</d:Id>\n\n'
+            '<d:Id m:type="Edm.Guid">80a26a44-cf5b-42b2-bf61-c3a021fa18c7</d:Id>\n'
         )
 
         with patch("builtins.print") as print_mock:
@@ -91,11 +91,22 @@ class CliHeadingTests(unittest.TestCase):
         self.assertIn(
             export_onenote.info_box(
                 [
-                    "After pasting the XML text, press ENTER twice to continue.",
+                    "After pasting the XML text, press Return/Enter once to continue.",
                 ]
             ),
             [call.args[0] for call in print_mock.call_args_list],
         )
+
+    def test_read_pasted_guid_accepts_one_enter_after_browser_text(self) -> None:
+        stdin = io.StringIO(
+            "This XML file does not appear to have any style information associated with it.\n"
+            '<d:Id m:type="Edm.Guid">5dbbcfdd-641d-42ed-b89a-2cb2451897ef</d:Id>\n'
+        )
+
+        with patch("builtins.print"):
+            result = export_onenote.read_pasted_guid("WEB_GUID", stdin)
+
+        self.assertEqual(result, "5dbbcfdd-641d-42ed-b89a-2cb2451897ef")
 
 
 class PaginationTests(unittest.TestCase):

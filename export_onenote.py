@@ -94,7 +94,7 @@ def info_box(lines: list[str]) -> str:
 
 def error_box(lines: list[str]) -> str:
     content = [str(line) for line in lines] or [""]
-    title = f"───{ERROR_BOX_TITLE}"
+    title = f"───────────{ERROR_BOX_TITLE}"
     width = max(max(len(line) for line in content), len(title) - 1)
     top = f"{INFO_BOX_TOP_LEFT}{title}{INFO_BOX_HORIZONTAL * (width + 2 - len(title))}{INFO_BOX_TOP_RIGHT}"
     bottom = f"{INFO_BOX_BOTTOM_LEFT}{INFO_BOX_HORIZONTAL * (width + 2)}{INFO_BOX_BOTTOM_RIGHT}"
@@ -289,7 +289,7 @@ def read_pasted_guid(label: str, input_stream: Any = sys.stdin) -> str:
     print(
         info_box(
             [
-                "After pasting the XML text, press ENTER twice to continue.",
+                "After pasting the XML text, press Return/Enter to continue.",
             ]
         )
     )
@@ -305,6 +305,9 @@ def read_pasted_guid(label: str, input_stream: Any = sys.stdin) -> str:
         if line.strip() == "" and not lines:
             continue
         lines.append(line)
+        pasted_text = "".join(lines)
+        if GUID_PATTERN.search(pasted_text) or "</m:error>" in pasted_text or "</d:Id>" in pasted_text:
+            return extract_sharepoint_guid(pasted_text, label)
 
     return extract_sharepoint_guid("".join(lines), label)
 
