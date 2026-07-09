@@ -239,8 +239,14 @@ def extract_sharepoint_guid(pasted_text: str, label: str) -> str:
     match = GUID_PATTERN.search(pasted_text)
     if match:
         return match.group(0).lower()
+    if "..." in pasted_text and re.search(r"<[A-Za-z][^>]*>", pasted_text):
+        raise ValueError(
+            f"[ERROR] {label} was not found in that paste.\n"
+            "[RECOMMENDATION] The pasted XML looks collapsed. Click the triangle/arrow next to "
+            "the XML line in the browser to expand it, then copy and paste the expanded text."
+        )
     raise ValueError(
-        f"[ERROR] I could not find {label} in that paste.\n"
+        f"[ERROR] {label} was not found in that paste.\n"
         "[RECOMMENDATION] Paste the full SharePoint XML page text, including the long value inside <d:Id>...</d:Id>."
     )
 

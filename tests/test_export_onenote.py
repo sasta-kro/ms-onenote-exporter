@@ -197,9 +197,23 @@ class SharePointUrlTests(unittest.TestCase):
     def test_extract_sharepoint_guid_explains_missing_guid(self) -> None:
         with self.assertRaisesRegex(
             ValueError,
-            r"\[ERROR\] I could not find WEB_GUID in that paste\.",
+            r"\[ERROR\] WEB_GUID was not found in that paste\.",
         ):
             export_onenote.extract_sharepoint_guid("not the XML page", "WEB_GUID")
+
+    def test_extract_sharepoint_guid_explains_collapsed_xml(self) -> None:
+        collapsed_xml = (
+            'This XML file does not appear to have any style information associated with it.\n'
+            '<m:error xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata">\n'
+            "...\n"
+            "</m:error>"
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"Click the triangle/arrow next to the XML line in the browser to expand it",
+        ):
+            export_onenote.extract_sharepoint_guid(collapsed_xml, "SITE_GUID")
 
 
 class SectionTraversalTests(unittest.TestCase):
@@ -946,11 +960,47 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 1)
         self.assertIn(
-            "[ERROR] I could not find SITE_GUID in that paste.",
+            "[ERROR] SITE_GUID was not found in that paste.",
             [call.args[0] for call in print_mock.call_args_list],
         )
         self.assertIn(
             "[RECOMMENDATION] Paste the full SharePoint XML page text, including the long value inside <d:Id>...</d:Id>.",
+            [call.args[0] for call in print_mock.call_args_list],
+        )
+
+    def test_main_explains_collapsed_interactive_site_url_xml(self) -> None:
+        stdin = FakeInteractiveStdin(
+            'This XML file does not appear to have any style information associated with it.\n'
+            '<m:error xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata">\n'
+            "...\n"
+            "</m:error>\n\n"
+        )
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(export_onenote, "load_dotenv", return_value=False),
+            patch("builtins.print") as print_mock,
+            patch("sys.stdin", stdin),
+        ):
+            exit_code = export_onenote.main(
+                [
+                    "--client-id",
+                    "abc",
+                    "--site-url",
+                    "https://school.sharepoint.com/teams/2026-GDD-542/Shared%20Documents",
+                    "--list",
+                ],
+                token_provider=Mock(return_value="token"),
+            )
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn(
+            "[ERROR] SITE_GUID was not found in that paste.",
+            [call.args[0] for call in print_mock.call_args_list],
+        )
+        self.assertIn(
+            "[RECOMMENDATION] The pasted XML looks collapsed. Click the triangle/arrow next to "
+            "the XML line in the browser to expand it, then copy and paste the expanded text.",
             [call.args[0] for call in print_mock.call_args_list],
         )
 
