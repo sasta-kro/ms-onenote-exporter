@@ -333,6 +333,22 @@ class ExportNotebookTests(unittest.TestCase):
         self.assertNotIn("<span", markdown)
         self.assertNotIn("graph.microsoft.com", markdown)
 
+    def test_convert_with_pandoc_removes_cleaned_html_when_pandoc_raises(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_base = Path(tmpdir) / "sample"
+            html_path = Path(f"{output_base}.html")
+            html_path.write_text("<html><body>Hello</body></html>", encoding="utf-8")
+            cleaned_path = Path(f"{output_base}.cleaned.html")
+
+            with (
+                patch.object(export_onenote.shutil, "which", return_value="/usr/bin/pandoc"),
+                patch.object(export_onenote.subprocess, "run", side_effect=RuntimeError("boom")),
+                self.assertRaises(RuntimeError),
+            ):
+                export_onenote.convert_with_pandoc(html_path, output_base, ["md"])
+
+            self.assertFalse(cleaned_path.exists())
+
     def test_export_notebooks_writes_manifest_inside_each_notebook_dir(self) -> None:
         client = Mock()
         client.list_notebooks.return_value = [

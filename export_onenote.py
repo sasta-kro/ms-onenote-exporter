@@ -756,25 +756,27 @@ def convert_with_pandoc(
         cleaned_path.write_text(cleaned_html, encoding="utf-8")
         source_path = cleaned_path
 
-    for fmt in formats:
-        out_path = output_path_for_format(output_base, fmt)
-        result = subprocess.run(
-            [pandoc, str(source_path), "-f", "html", "-t", PANDOC_TARGETS[fmt], "-o", str(out_path)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            check=False,
-        )
-        if result.returncode != 0:
-            print(f"pandoc failed for {html_path.name} -> {fmt}")
-            print(result.stderr[:1000])
-        elif fmt in {"md", "txt"}:
-            out_path.write_text(
-                clean_converted_text(out_path.read_text(encoding="utf-8")),
-                encoding="utf-8",
+    try:
+        for fmt in formats:
+            out_path = output_path_for_format(output_base, fmt)
+            result = subprocess.run(
+                [pandoc, str(source_path), "-f", "html", "-t", PANDOC_TARGETS[fmt], "-o", str(out_path)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
             )
-    if cleaned_path:
-        cleaned_path.unlink(missing_ok=True)
+            if result.returncode != 0:
+                print(f"pandoc failed for {html_path.name} -> {fmt}")
+                print(result.stderr[:1000])
+            elif fmt in {"md", "txt"}:
+                out_path.write_text(
+                    clean_converted_text(out_path.read_text(encoding="utf-8")),
+                    encoding="utf-8",
+                )
+    finally:
+        if cleaned_path:
+            cleaned_path.unlink(missing_ok=True)
 
 
 def page_content_url(location: str, page: dict[str, Any]) -> tuple[str, dict[str, str] | None]:
