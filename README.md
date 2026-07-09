@@ -100,16 +100,16 @@ into the terminal. The app extracts the GUID automatically.
 Example terminal shape:
 
 ```text
->>>>> Step 1 (SITE_GUID): open this in the signed-in browser
+>>>>> Step 1 (SITE_GUID): open this in the signed-in browser and copy the whole text.
 
 ╭───────────────────────────────────────────────────────────────╮
 │ https://school.sharepoint.com/sites/Section_.../_api/site/id  │
 ╰───────────────────────────────────────────────────────────────╯
 
 >>>>> Paste SITE_GUID page text
-╭─────────────────────────────────────────────────────────────╮
-│ After pasting the XML text, press Return/Enter to continue. │
-╰─────────────────────────────────────────────────────────────╯
+╭─────────────────────────────────────────────────────────────────────────────────────╮
+│ After copying the whole XML text and pasting it here, press Return/Enter to continue. │
+╰─────────────────────────────────────────────────────────────────────────────────────╯
 >
 ```
 
@@ -361,7 +361,7 @@ install Pandoc or leave `ONENOTE_FORMATS` blank for HTML-only export.
 If the same GUID is pasted for both SharePoint helper steps, open the second
 helper link again. Step 1 and Step 2 must return different GUID values.
 
-## Use Outside Assumption University
+## For Use Outside Assumption University
 
 The preset `ONENOTE_CLIENT_ID` is meant for Assumption University students. For
 another school, company, or personal Microsoft tenant, create a separate

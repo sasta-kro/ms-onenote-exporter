@@ -62,7 +62,10 @@ def log_action(message: str) -> None:
 
 
 def log_device_code(code: str) -> None:
-    print(f"[DEVICE CODE] {code}")
+    print("[DEVICE CODE]")
+    print("")
+    print(copy_block(code))
+    print("")
 
 
 def log_recommendation(message: str) -> None:
@@ -141,6 +144,7 @@ def log_device_flow(flow: dict[str, Any]) -> None:
     if not url:
         url = "https://login.microsoft.com/device"
 
+    print(info_box(["This is a one-time setup process for a new user.", "Microsoft handles the authentication."]))
     log_action(f"Open this URL in your browser: {url}")
     log_device_code(code)
     log_action("Paste the device code above into the Microsoft page, then click Next.")
@@ -150,6 +154,7 @@ def log_device_flow(flow: dict[str, Any]) -> None:
     if isinstance(expires_in, int) and expires_in > 0:
         minutes = max(1, round(expires_in / 60))
         log_info(f"Code expires in about {minutes} minutes.")
+    log_info("After login finishes in the browser, this program will continue automatically.")
 
 
 def safe_name(value: str | None, fallback: str = "untitled", limit: int = 140) -> str:
@@ -200,14 +205,18 @@ def sharepoint_url_to_site_id_helper_urls(url: str) -> SharePointSiteIdHelperUrl
     host = parsed.netloc.lower()
     path_parts = [unquote(part) for part in parsed.path.split("/") if part]
 
-    if not host or len(path_parts) < 2 or path_parts[0].lower() not in {"sites", "teams"}:
+    site_index = next(
+        (index for index, part in enumerate(path_parts) if part.lower() in {"sites", "teams"}),
+        None,
+    )
+    if not host or site_index is None or len(path_parts) <= site_index + 1:
         raise ValueError(
             "Could not infer a SharePoint site from that URL. Expected a URL containing "
             "/sites/<name>/... or /teams/<name>/..."
         )
 
-    site_kind = path_parts[0].lower()
-    site_name = quote(path_parts[1], safe="")
+    site_kind = path_parts[site_index].lower()
+    site_name = quote(path_parts[site_index + 1], safe="")
     site_root = f"{scheme}://{host}/{site_kind}/{site_name}"
     return SharePointSiteIdHelperUrls(
         site_root=site_root,
@@ -234,19 +243,9 @@ def site_url_next_flag(*, notebook: str | None) -> str:
     return "--list"
 
 
-def print_detected_sharepoint_site(helper: SharePointSiteIdHelperUrls, *, boxed: bool) -> None:
-    print("")
-    print(section_heading("Detected notebook storage site (for checking only)"))
-    print("This is the Teams/SharePoint site that stores the notebook file. You usually do not need to open it.")
-    if boxed:
-        print(info_box([helper.site_root]))
-    else:
-        print(helper.site_root)
-
-
 def print_guid_helper_link(step: int, label: str, url: str) -> None:
     print("")
-    print(section_heading(f"Step {step} ({label}): open this in your signed-in browser"))
+    print(section_heading(f"Step {step} ({label}): open this in your signed-in browser and copy the whole text."))
     print("")
     print(info_box([url]))
 
@@ -292,7 +291,7 @@ def read_pasted_guid(label: str, input_stream: Any = sys.stdin) -> str:
     print(
         info_box(
             [
-                "After pasting the XML text, press Return/Enter to continue.",
+                "After copying the whole XML text and pasting it here, press Return/Enter to continue.",
             ]
         )
     )
@@ -324,7 +323,6 @@ def prompt_for_site_id_from_site_url(
     helper = sharepoint_url_to_site_id_helper_urls(site_url)
     next_flag = site_url_next_flag(notebook=notebook)
 
-    print_detected_sharepoint_site(helper, boxed=False)
     print_guid_helper_link(1, "SITE_GUID", helper.site_id_url)
     site_guid = read_pasted_guid("SITE_GUID", input_stream)
     print_guid_helper_link(2, "WEB_GUID", helper.web_id_url)
@@ -347,7 +345,6 @@ def print_site_id_helper(site_url: str, *, notebook: str | None = None) -> None:
     helper = sharepoint_url_to_site_id_helper_urls(site_url)
     next_flag = site_url_next_flag(notebook=notebook)
 
-    print_detected_sharepoint_site(helper, boxed=True)
     print_guid_helper_link(1, "SITE_GUID", helper.site_id_url)
     print_guid_helper_link(2, "WEB_GUID", helper.web_id_url)
     print("")
@@ -978,7 +975,12 @@ def export_notebooks(
 
 def print_optional_format_commands(export_command_base: str, notebook_name: str) -> None:
     print("")
-    print(section_heading("If you want to export to Markdown, TXT, or RTF format instead:"))
+    print(
+        section_heading(
+            "It is currently downloaded as HTML files.\n"
+            "If you want to export to Markdown, TXT, or RTF format instead:"
+        )
+    )
     print("")
     print(copy_block(f"{export_command_base} --notebook {shell_double_quote(notebook_name)} --formats md"))
     print("")
@@ -1073,11 +1075,11 @@ def main(
     auto_export_single_site_url_notebook = False
 
     args = parse_args(argv)
+    input_stream = sys.stdin
     try:
-        resolved_auto_export = resolve_site_url_if_needed(args, raw_argv, sys.stdin)
-        if resolved_auto_export is None:
-            return 0
-        auto_export_single_site_url_notebook = resolved_auto_export
+        if args.site_url and not args.site_id and not input_stream.isatty():
+            if resolve_site_url_if_needed(args, raw_argv, input_stream) is None:
+                return 0
     except ValueError as exc:
         message = str(exc)
         if message.startswith("[ERROR]"):
@@ -1093,7 +1095,9 @@ def main(
 
     try:
         formats = parse_formats(args.formats)
-        context = build_export_context(args)
+        context: ExportContext | None = None
+        if args.site_id or not args.site_url:
+            context = build_export_context(args)
 
         token = token_provider(
             client_id=args.client_id,
@@ -1102,6 +1106,14 @@ def main(
             cache_path=Path(args.cache),
         )
         client = client_factory(token)
+
+        resolved_auto_export = resolve_site_url_if_needed(args, raw_argv, input_stream)
+        if resolved_auto_export is None:
+            return 0
+        auto_export_single_site_url_notebook = resolved_auto_export
+
+        if context is None:
+            context = build_export_context(args)
 
         if args.list:
             print_notebooks(client, context.location, export_command_base=context.export_command_base)

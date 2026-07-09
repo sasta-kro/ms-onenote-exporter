@@ -91,7 +91,7 @@ class CliHeadingTests(unittest.TestCase):
         self.assertIn(
             export_onenote.info_box(
                 [
-                    "After pasting the XML text, press Return/Enter to continue.",
+                    "After copying the whole XML text and pasting it here, press Return/Enter to continue.",
                 ]
             ),
             [call.args[0] for call in print_mock.call_args_list],
@@ -170,6 +170,27 @@ class SharePointUrlTests(unittest.TestCase):
         self.assertEqual(
             result.site_id_template,
             "school.sharepoint.com,SITE_GUID,WEB_GUID",
+        )
+
+    def test_sharepoint_url_to_site_id_helper_urls_supports_sharepoint_redirect_links(self) -> None:
+        url = (
+            "https://school.sharepoint.com/:o:/r/sites/Section_123/_layouts/15/Doc.aspx"
+            "?sourcedoc={abc}&action=edit"
+        )
+
+        result = export_onenote.sharepoint_url_to_site_id_helper_urls(url)
+
+        self.assertEqual(
+            result.site_root,
+            "https://school.sharepoint.com/sites/Section_123",
+        )
+        self.assertEqual(
+            result.site_id_url,
+            "https://school.sharepoint.com/sites/Section_123/_api/site/id",
+        )
+        self.assertEqual(
+            result.web_id_url,
+            "https://school.sharepoint.com/sites/Section_123/_api/web/id",
         )
 
     def test_site_id_to_site_location_accepts_graph_site_id(self) -> None:
@@ -738,11 +759,21 @@ class CliTests(unittest.TestCase):
         self.assertEqual(
             [call.args[0] for call in print_mock.call_args_list],
             [
+                export_onenote.info_box(
+                    [
+                        "This is a one-time setup process for a new user.",
+                        "Microsoft handles the authentication.",
+                    ]
+                ),
                 "[ACTION] Open this URL in your browser: https://login.microsoft.com/device",
-                "[DEVICE CODE] SRNMMXBNA",
+                "[DEVICE CODE]",
+                "",
+                export_onenote.copy_block("SRNMMXBNA"),
+                "",
                 "[ACTION] Paste the device code above into the Microsoft page, then click Next.",
                 "[INFO] The code is printed here in the terminal. It is not in Teams or OneNote.",
                 "[INFO] Code expires in about 30 minutes.",
+                "[INFO] After login finishes in the browser, this program will continue automatically.",
             ],
         )
 
@@ -833,15 +864,15 @@ class CliTests(unittest.TestCase):
             [call.args[0] for call in print_mock.call_args_list],
             [
                 "",
-                export_onenote.section_heading("Detected notebook storage site (for checking only)"),
-                "This is the Teams/SharePoint site that stores the notebook file. You usually do not need to open it.",
-                export_onenote.info_box(["https://school.sharepoint.com/teams/2026-GDD-542"]),
-                "",
-                export_onenote.section_heading("Step 1 (SITE_GUID): open this in your signed-in browser"),
+                export_onenote.section_heading(
+                    "Step 1 (SITE_GUID): open this in your signed-in browser and copy the whole text."
+                ),
                 "",
                 export_onenote.info_box(["https://school.sharepoint.com/teams/2026-GDD-542/_api/site/id"]),
                 "",
-                export_onenote.section_heading("Step 2 (WEB_GUID): open this in your signed-in browser"),
+                export_onenote.section_heading(
+                    "Step 2 (WEB_GUID): open this in your signed-in browser and copy the whole text."
+                ),
                 "",
                 export_onenote.info_box(["https://school.sharepoint.com/teams/2026-GDD-542/_api/web/id"]),
                 "",
@@ -853,7 +884,17 @@ class CliTests(unittest.TestCase):
         )
 
     def test_main_prompts_for_site_url_guids_and_lists_notebooks_when_interactive(self) -> None:
-        token_provider = Mock(return_value="token")
+        print_events: list[str] = []
+
+        def record_token_provider(**_: object) -> str:
+            print_events.append("token_provider")
+            return "token"
+
+        token_provider = Mock(side_effect=record_token_provider)
+
+        def record_print(*args: object, **_: object) -> None:
+            print_events.append(str(args[0]) if args else "")
+
         client = Mock()
         client.list_notebooks.return_value = [
             {"displayName": "2026-1 BAD 542 Notebook", "isShared": False, "userRole": "Owner"}
@@ -873,7 +914,7 @@ class CliTests(unittest.TestCase):
         with (
             patch.dict(os.environ, {}, clear=True),
             patch.object(export_onenote, "load_dotenv", return_value=False),
-            patch("builtins.print") as print_mock,
+            patch("builtins.print", side_effect=record_print) as print_mock,
             patch("sys.stdin", stdin),
         ):
             exit_code = export_onenote.main(
@@ -902,6 +943,13 @@ class CliTests(unittest.TestCase):
             export_onenote.info_box(["https://school.sharepoint.com/teams/2026-GDD-542/_api/site/id"]),
             [call.args[0] for call in print_mock.call_args_list],
         )
+        first_helper_prompt_index = print_events.index(
+            export_onenote.section_heading(
+                "Step 1 (SITE_GUID): open this in your signed-in browser and copy the whole text."
+            )
+        )
+        token_provider_index = print_events.index("token_provider")
+        self.assertLess(token_provider_index, first_helper_prompt_index)
         self.assertIn(
             export_onenote.info_box(["https://school.sharepoint.com/teams/2026-GDD-542/_api/web/id"]),
             [call.args[0] for call in print_mock.call_args_list],
@@ -1135,7 +1183,7 @@ class CliTests(unittest.TestCase):
             [call.args[0] for call in print_mock.call_args_list],
         )
 
-    def test_main_rejects_duplicate_interactive_site_and_web_guid_before_login(self) -> None:
+    def test_main_rejects_duplicate_interactive_site_and_web_guid_after_login(self) -> None:
         token_provider = Mock(return_value="token")
         same_guid = "80a26a44-cf5b-42b2-bf61-c3a021fa18c7"
         stdin = FakeInteractiveStdin(
@@ -1165,10 +1213,15 @@ class CliTests(unittest.TestCase):
                 ],
                 token_provider=token_provider,
                 client_factory=Mock(),
-            )
+        )
 
         self.assertEqual(exit_code, 1)
-        token_provider.assert_not_called()
+        token_provider.assert_called_once_with(
+            client_id="abc",
+            tenant_id="organizations",
+            scopes=["Notes.Read.All"],
+            cache_path=Path(".msal_token_cache.json"),
+        )
         self.assertIn(
             export_onenote.error_box(
                 [
