@@ -168,6 +168,12 @@ class SharePointSiteIdHelperUrls:
     site_id_template: str
 
 
+@dataclass(frozen=True)
+class ExportContext:
+    location: str
+    export_command_base: str
+
+
 def sharepoint_url_to_site_id_helper_urls(url: str) -> SharePointSiteIdHelperUrls:
     parsed = urlparse(url.strip())
     scheme = parsed.scheme or "https"
@@ -912,6 +918,79 @@ def print_notebooks(client: GraphClient, location: str, export_command_base: str
     return notebooks
 
 
+def resolve_site_url_if_needed(args: argparse.Namespace, raw_argv: list[str], input_stream: Any) -> bool | None:
+    if not args.site_url or args.site_id:
+        return False
+    explicit_list = "--list" in raw_argv
+    if input_stream.isatty():
+        auto_export_single_notebook = not explicit_list and not args.notebook
+        args.site_id = prompt_for_site_id_from_site_url(
+            args.site_url,
+            input_stream=input_stream,
+            list_notebooks=args.list,
+            notebook=args.notebook,
+        )
+        return auto_export_single_notebook
+    print_site_id_helper(args.site_url, list_notebooks=args.list, notebook=args.notebook)
+    return None
+
+
+def build_export_context(args: argparse.Namespace) -> ExportContext:
+    if args.site_id:
+        location = site_id_to_site_location(args.site_id)
+        site_id_value = location[len("/sites/") :]
+        return ExportContext(
+            location=location,
+            export_command_base=f"python main.py --site-id {shell_double_quote(site_id_value)}",
+        )
+    return ExportContext(location="/me", export_command_base="python main.py")
+
+
+def run_auto_export_single_notebook_flow(
+    *,
+    args: argparse.Namespace,
+    client: GraphClient,
+    context: ExportContext,
+    formats: list[str],
+) -> None:
+    notebooks = print_notebooks(client, context.location, export_command_base=context.export_command_base)
+    if len(notebooks) == 1:
+        notebook_name = notebooks[0].get("displayName") or "Untitled notebook"
+        print("")
+        print(section_heading("Auto-downloading the only notebook"))
+        print(ascii_box([notebook_name]))
+        export_notebooks(
+            client,
+            location=context.location,
+            output_dir=Path(args.out).expanduser().resolve(),
+            notebook_filter=notebook_name,
+            formats=formats,
+            include_image_links=args.include_image_links,
+        )
+        print_optional_format_commands(context.export_command_base, notebook_name)
+    elif len(notebooks) > 1:
+        print("")
+        log_info("More than one notebook was found, so nothing was auto-downloaded.")
+        log_recommendation("Copy one of the notebook download commands above.")
+
+
+def run_export_flow(
+    *,
+    args: argparse.Namespace,
+    client: GraphClient,
+    context: ExportContext,
+    formats: list[str],
+) -> None:
+    export_notebooks(
+        client,
+        location=context.location,
+        output_dir=Path(args.out).expanduser().resolve(),
+        notebook_filter=args.notebook,
+        formats=formats,
+        include_image_links=args.include_image_links,
+    )
+
+
 def main(
     argv: list[str] | None = None,
     *,
@@ -919,31 +998,22 @@ def main(
     client_factory: Callable[[str], GraphClient] = GraphClient,
 ) -> int:
     raw_argv = list(argv) if argv is not None else sys.argv[1:]
-    explicit_list = "--list" in raw_argv
     auto_export_single_site_url_notebook = False
 
     args = parse_args(argv)
-    if args.site_url and not args.site_id:
-        try:
-            if sys.stdin.isatty():
-                auto_export_single_site_url_notebook = not explicit_list and not args.notebook
-                args.site_id = prompt_for_site_id_from_site_url(
-                    args.site_url,
-                    input_stream=sys.stdin,
-                    list_notebooks=args.list,
-                    notebook=args.notebook,
-                )
-            else:
-                print_site_id_helper(args.site_url, list_notebooks=args.list, notebook=args.notebook)
-                return 0
-        except ValueError as exc:
-            message = str(exc)
-            if message.startswith("[ERROR]"):
-                for line in message.splitlines():
-                    print(line)
-            else:
-                print(message, file=sys.stderr)
-            return 1
+    try:
+        resolved_auto_export = resolve_site_url_if_needed(args, raw_argv, sys.stdin)
+        if resolved_auto_export is None:
+            return 0
+        auto_export_single_site_url_notebook = resolved_auto_export
+    except ValueError as exc:
+        message = str(exc)
+        if message.startswith("[ERROR]"):
+            for line in message.splitlines():
+                print(line)
+        else:
+            print(message, file=sys.stderr)
+        return 1
 
     if not args.client_id:
         log_error("Missing Microsoft Entra application/client ID.")
@@ -952,13 +1022,7 @@ def main(
 
     try:
         formats = parse_formats(args.formats)
-        if args.site_id:
-            location = site_id_to_site_location(args.site_id)
-            site_id_value = location[len("/sites/") :]
-            export_command_base = f"python main.py --site-id {shell_double_quote(site_id_value)}"
-        else:
-            location = "/me"
-            export_command_base = "python main.py"
+        context = build_export_context(args)
 
         token = token_provider(
             client_id=args.client_id,
@@ -969,39 +1033,19 @@ def main(
         client = client_factory(token)
 
         if args.list:
-            print_notebooks(client, location, export_command_base=export_command_base)
+            print_notebooks(client, context.location, export_command_base=context.export_command_base)
             return 0
 
         if auto_export_single_site_url_notebook:
-            notebooks = print_notebooks(client, location, export_command_base=export_command_base)
-            if len(notebooks) == 1:
-                notebook_name = notebooks[0].get("displayName") or "Untitled notebook"
-                print("")
-                print(section_heading("Auto-downloading the only notebook"))
-                print(ascii_box([notebook_name]))
-                export_notebooks(
-                    client,
-                    location=location,
-                    output_dir=Path(args.out).expanduser().resolve(),
-                    notebook_filter=notebook_name,
-                    formats=formats,
-                    include_image_links=args.include_image_links,
-                )
-                print_optional_format_commands(export_command_base, notebook_name)
-            elif len(notebooks) > 1:
-                print("")
-                log_info("More than one notebook was found, so nothing was auto-downloaded.")
-                log_recommendation("Copy one of the notebook download commands above.")
+            run_auto_export_single_notebook_flow(
+                args=args,
+                client=client,
+                context=context,
+                formats=formats,
+            )
             return 0
 
-        export_notebooks(
-            client,
-            location=location,
-            output_dir=Path(args.out).expanduser().resolve(),
-            notebook_filter=args.notebook,
-            formats=formats,
-            include_image_links=args.include_image_links,
-        )
+        run_export_flow(args=args, client=client, context=context, formats=formats)
         return 0
     except MissingDependencyError as exc:
         log_missing_dependency(exc)

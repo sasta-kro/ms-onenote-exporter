@@ -509,6 +509,24 @@ class CliTests(unittest.TestCase):
 
         self.assertTrue(args.include_image_links)
 
+    def test_build_export_context_uses_site_id_or_me_location(self) -> None:
+        site_args = argparse.Namespace(site_id="school.sharepoint.com,site-guid,web-guid")
+        me_args = argparse.Namespace(site_id=None)
+
+        site_context = export_onenote.build_export_context(site_args)
+        me_context = export_onenote.build_export_context(me_args)
+
+        self.assertEqual(
+            site_context.location,
+            "/sites/school.sharepoint.com,site-guid,web-guid",
+        )
+        self.assertEqual(
+            site_context.export_command_base,
+            'python main.py --site-id "school.sharepoint.com,site-guid,web-guid"',
+        )
+        self.assertEqual(me_context.location, "/me")
+        self.assertEqual(me_context.export_command_base, "python main.py")
+
     def test_parse_args_rejects_removed_flags(self) -> None:
         removed_flags = [
             ["--location", "/groups/abc"],
