@@ -62,7 +62,10 @@ def log_action(message: str) -> None:
 
 
 def log_device_code(code: str) -> None:
-    print(f"[DEVICE CODE] {code}")
+    print("[DEVICE CODE]")
+    print("")
+    print(copy_block(code))
+    print("")
 
 
 def log_recommendation(message: str) -> None:
@@ -141,6 +144,7 @@ def log_device_flow(flow: dict[str, Any]) -> None:
     if not url:
         url = "https://login.microsoft.com/device"
 
+    print(info_box(["This is a one-time setup process for a new user.", "Microsoft handles the authentication."]))
     log_action(f"Open this URL in your browser: {url}")
     log_device_code(code)
     log_action("Paste the device code above into the Microsoft page, then click Next.")
@@ -150,6 +154,7 @@ def log_device_flow(flow: dict[str, Any]) -> None:
     if isinstance(expires_in, int) and expires_in > 0:
         minutes = max(1, round(expires_in / 60))
         log_info(f"Code expires in about {minutes} minutes.")
+    log_info("After login finishes in the browser, this program will continue automatically.")
 
 
 def safe_name(value: str | None, fallback: str = "untitled", limit: int = 140) -> str:
@@ -1073,11 +1078,11 @@ def main(
     auto_export_single_site_url_notebook = False
 
     args = parse_args(argv)
+    input_stream = sys.stdin
     try:
-        resolved_auto_export = resolve_site_url_if_needed(args, raw_argv, sys.stdin)
-        if resolved_auto_export is None:
-            return 0
-        auto_export_single_site_url_notebook = resolved_auto_export
+        if args.site_url and not args.site_id and not input_stream.isatty():
+            if resolve_site_url_if_needed(args, raw_argv, input_stream) is None:
+                return 0
     except ValueError as exc:
         message = str(exc)
         if message.startswith("[ERROR]"):
@@ -1093,7 +1098,9 @@ def main(
 
     try:
         formats = parse_formats(args.formats)
-        context = build_export_context(args)
+        context: ExportContext | None = None
+        if args.site_id or not args.site_url:
+            context = build_export_context(args)
 
         token = token_provider(
             client_id=args.client_id,
@@ -1102,6 +1109,14 @@ def main(
             cache_path=Path(args.cache),
         )
         client = client_factory(token)
+
+        resolved_auto_export = resolve_site_url_if_needed(args, raw_argv, input_stream)
+        if resolved_auto_export is None:
+            return 0
+        auto_export_single_site_url_notebook = resolved_auto_export
+
+        if context is None:
+            context = build_export_context(args)
 
         if args.list:
             print_notebooks(client, context.location, export_command_base=context.export_command_base)
