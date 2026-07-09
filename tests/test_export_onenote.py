@@ -245,6 +245,18 @@ class SectionTraversalTests(unittest.TestCase):
 
 
 class ExportNotebookTests(unittest.TestCase):
+    def test_filter_notebooks_matches_display_name_case_insensitively(self) -> None:
+        notebooks = [
+            {"displayName": "2026-1 BAD 542 Notebook"},
+            {"displayName": "Personal Notes"},
+        ]
+
+        self.assertEqual(
+            export_onenote.filter_notebooks(notebooks, "bad 542"),
+            [{"displayName": "2026-1 BAD 542 Notebook"}],
+        )
+        self.assertEqual(export_onenote.filter_notebooks(notebooks, None), notebooks)
+
     def test_export_page_preserves_titles_with_dot_words(self) -> None:
         client = Mock()
         client.bytes.return_value = b"<html><body>Env setup</body></html>"

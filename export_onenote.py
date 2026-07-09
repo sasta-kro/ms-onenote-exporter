@@ -174,6 +174,14 @@ class ExportContext:
     export_command_base: str
 
 
+@dataclass(frozen=True)
+class NotebookOutput:
+    name: str
+    folder: Path
+    manifest: Path
+    page_count: int
+
+
 def sharepoint_url_to_site_id_helper_urls(url: str) -> SharePointSiteIdHelperUrls:
     parsed = urlparse(url.strip())
     scheme = parsed.scheme or "https"
@@ -804,6 +812,103 @@ def export_page(
     }
 
 
+def filter_notebooks(notebooks: list[dict[str, Any]], notebook_filter: str | None) -> list[dict[str, Any]]:
+    if not notebook_filter:
+        return notebooks
+    return [
+        notebook
+        for notebook in notebooks
+        if notebook_filter.lower() in (notebook.get("displayName") or "").lower()
+    ]
+
+
+def print_no_notebooks_help(
+    *,
+    location: str,
+    notebook_filter: str | None,
+    all_notebooks: list[dict[str, Any]],
+) -> None:
+    if notebook_filter and all_notebooks:
+        log_error(f"No notebooks matched filter: {notebook_filter}")
+        log_info(f"Notebooks visible at {normalize_location(location)}:")
+        for notebook in all_notebooks[:20]:
+            print(f"  - {notebook.get('displayName') or 'Untitled notebook'}")
+        if len(all_notebooks) > 20:
+            print(f"  ... and {len(all_notebooks) - 20} more")
+        log_recommendation("Copy one of the names above exactly, or run with --list.")
+        log_recommendation(
+            "If your class notebook is not listed, it may live under a Microsoft 365 group "
+            "or SharePoint site."
+        )
+        return
+
+    log_error(f"No notebooks found at {normalize_location(location)}.")
+    log_recommendation(
+        "If this is a Teams/Class Notebook, use --site-url with the notebook browser link."
+    )
+
+
+def write_notebook_manifest(notebook_dir: Path, manifest: list[dict[str, str]]) -> Path:
+    manifest_path = notebook_dir / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    return manifest_path
+
+
+def export_one_notebook(
+    client: GraphClient,
+    *,
+    location: str,
+    output_dir: Path,
+    notebook: dict[str, Any],
+    formats: list[str],
+    include_image_links: bool,
+) -> NotebookOutput:
+    notebook_name = notebook.get("displayName") or "Untitled notebook"
+    print(f"\nNotebook: {notebook_name}")
+    notebook_dir = output_dir / safe_name(notebook_name)
+    notebook_dir.mkdir(parents=True, exist_ok=True)
+    notebook_manifest: list[dict[str, str]] = []
+    page_count = 0
+
+    for section_path, section in iter_sections(client, notebook):
+        section_dir = notebook_dir / safe_name(section_path)
+        section_dir.mkdir(parents=True, exist_ok=True)
+        pages = client.list_pages(section)
+        print(f"  Section: {section_path} ({len(pages)} pages)")
+
+        for page in pages:
+            print(f"    Exporting: {page.get('title') or 'Untitled page'}")
+            record = export_page(
+                client,
+                location=location,
+                page=page,
+                output_dir=section_dir,
+                formats=formats,
+                include_image_links=include_image_links,
+            )
+            record["notebook"] = notebook_name
+            record["section"] = section_path
+            notebook_manifest.append(record)
+            page_count += 1
+
+    manifest_path = write_notebook_manifest(notebook_dir, notebook_manifest)
+    return NotebookOutput(
+        name=notebook_name,
+        folder=notebook_dir,
+        manifest=manifest_path,
+        page_count=page_count,
+    )
+
+
+def print_export_summary(total_pages: int, output_dir: Path, notebook_outputs: list[NotebookOutput]) -> None:
+    print(f"\nExported {total_pages} page(s).")
+    print(f"Output root: {output_dir}")
+    for notebook_output in notebook_outputs:
+        print(f"Notebook output: {notebook_output.name}")
+        print(f"  Folder: {notebook_output.folder}")
+        print(f"  Manifest: {notebook_output.manifest}")
+
+
 def export_notebooks(
     client: GraphClient,
     *,
@@ -814,76 +919,30 @@ def export_notebooks(
     include_image_links: bool = False,
 ) -> int:
     all_notebooks = client.list_notebooks(location)
-    notebooks = all_notebooks
-    if notebook_filter:
-        notebooks = [
-            notebook
-            for notebook in notebooks
-            if notebook_filter.lower() in (notebook.get("displayName") or "").lower()
-        ]
+    notebooks = filter_notebooks(all_notebooks, notebook_filter)
 
     if not notebooks:
-        if notebook_filter and all_notebooks:
-            log_error(f"No notebooks matched filter: {notebook_filter}")
-            log_info(f"Notebooks visible at {normalize_location(location)}:")
-            for notebook in all_notebooks[:20]:
-                print(f"  - {notebook.get('displayName') or 'Untitled notebook'}")
-            if len(all_notebooks) > 20:
-                print(f"  ... and {len(all_notebooks) - 20} more")
-            log_recommendation("Copy one of the names above exactly, or run with --list.")
-            log_recommendation(
-                "If your class notebook is not listed, it may live under a Microsoft 365 group "
-                "or SharePoint site."
-            )
-        else:
-            log_error(f"No notebooks found at {normalize_location(location)}.")
-            log_recommendation(
-                "If this is a Teams/Class Notebook, use --site-url with the notebook browser link."
-            )
+        print_no_notebooks_help(
+            location=location,
+            notebook_filter=notebook_filter,
+            all_notebooks=all_notebooks,
+        )
         return 0
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    total_pages = 0
-    notebook_outputs: list[tuple[str, Path, Path]] = []
-
-    for notebook in notebooks:
-        notebook_name = notebook.get("displayName") or "Untitled notebook"
-        print(f"\nNotebook: {notebook_name}")
-        notebook_dir = output_dir / safe_name(notebook_name)
-        notebook_dir.mkdir(parents=True, exist_ok=True)
-        notebook_manifest: list[dict[str, str]] = []
-
-        for section_path, section in iter_sections(client, notebook):
-            section_dir = notebook_dir / safe_name(section_path)
-            section_dir.mkdir(parents=True, exist_ok=True)
-            pages = client.list_pages(section)
-            print(f"  Section: {section_path} ({len(pages)} pages)")
-
-            for page in pages:
-                print(f"    Exporting: {page.get('title') or 'Untitled page'}")
-                record = export_page(
-                    client,
-                    location=location,
-                    page=page,
-                    output_dir=section_dir,
-                    formats=formats,
-                    include_image_links=include_image_links,
-                )
-                record["notebook"] = notebook_name
-                record["section"] = section_path
-                notebook_manifest.append(record)
-                total_pages += 1
-
-        manifest_path = notebook_dir / "manifest.json"
-        manifest_path.write_text(json.dumps(notebook_manifest, indent=2), encoding="utf-8")
-        notebook_outputs.append((notebook_name, notebook_dir, manifest_path))
-
-    print(f"\nExported {total_pages} page(s).")
-    print(f"Output root: {output_dir}")
-    for notebook_name, notebook_dir, manifest_path in notebook_outputs:
-        print(f"Notebook output: {notebook_name}")
-        print(f"  Folder: {notebook_dir}")
-        print(f"  Manifest: {manifest_path}")
+    notebook_outputs = [
+        export_one_notebook(
+            client,
+            location=location,
+            output_dir=output_dir,
+            notebook=notebook,
+            formats=formats,
+            include_image_links=include_image_links,
+        )
+        for notebook in notebooks
+    ]
+    total_pages = sum(notebook_output.page_count for notebook_output in notebook_outputs)
+    print_export_summary(total_pages, output_dir, notebook_outputs)
     return total_pages
 
 
