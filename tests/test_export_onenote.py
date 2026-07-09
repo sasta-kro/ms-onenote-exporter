@@ -50,8 +50,8 @@ class CliHeadingTests(unittest.TestCase):
 
         self.assertEqual(result, '    python main.py --site-id "abc" --list')
 
-    def test_ascii_box_formats_info_values_with_rounded_unicode_box(self) -> None:
-        result = export_onenote.ascii_box(["1. Course Notebook", "2. Lab Notebook"])
+    def test_info_box_formats_info_values_with_rounded_unicode_box(self) -> None:
+        result = export_onenote.info_box(["1. Course Notebook", "2. Lab Notebook"])
 
         self.assertEqual(
             result,
@@ -65,12 +65,6 @@ class CliHeadingTests(unittest.TestCase):
             ),
         )
 
-    def test_info_box_is_the_preferred_name_for_rounded_info_boxes(self) -> None:
-        self.assertEqual(
-            export_onenote.info_box(["Ready"]),
-            export_onenote.ascii_box(["Ready"]),
-        )
-
     def test_read_pasted_guid_boxes_enter_twice_instruction(self) -> None:
         stdin = io.StringIO(
             '<d:Id m:type="Edm.Guid">80a26a44-cf5b-42b2-bf61-c3a021fa18c7</d:Id>\n\n'
@@ -81,7 +75,7 @@ class CliHeadingTests(unittest.TestCase):
 
         self.assertEqual(result, "80a26a44-cf5b-42b2-bf61-c3a021fa18c7")
         self.assertIn(
-            export_onenote.ascii_box(
+            export_onenote.info_box(
                 [
                     "After pasting the XML text, press ENTER twice to continue.",
                 ]
@@ -120,15 +114,11 @@ class PaginationTests(unittest.TestCase):
 class SharePointUrlTests(unittest.TestCase):
     def test_site_url_next_flag_prefers_notebook_then_list(self) -> None:
         self.assertEqual(
-            export_onenote.site_url_next_flag(list_notebooks=False, notebook="Course Notes"),
+            export_onenote.site_url_next_flag(notebook="Course Notes"),
             '--notebook "Course Notes"',
         )
         self.assertEqual(
-            export_onenote.site_url_next_flag(list_notebooks=True, notebook=None),
-            "--list",
-        )
-        self.assertEqual(
-            export_onenote.site_url_next_flag(list_notebooks=False, notebook=None),
+            export_onenote.site_url_next_flag(notebook=None),
             "--list",
         )
 
@@ -617,21 +607,21 @@ class CliTests(unittest.TestCase):
         with (
             patch("builtins.print") as print_mock,
             patch.object(export_onenote.sys, "executable", "/opt/miniforge3/bin/python3"),
-            patch.object(export_onenote, "local_venv_python", return_value=Path("/project/.venv/bin/python")),
         ):
             exit_code = export_onenote.main(
                 ["--client-id", "abc"],
                 token_provider=token_provider,
             )
 
+        venv_python = Path(export_onenote.__file__).resolve().parent / ".venv" / "bin" / "python"
         self.assertEqual(exit_code, 1)
         self.assertEqual(
             [call.args[0] for call in print_mock.call_args_list],
             [
                 "[ERROR] Missing dependency 'msal' in the active Python interpreter.",
                 "[INFO] Active Python: /opt/miniforge3/bin/python3",
-                "[INFO] Project venv Python: /project/.venv/bin/python",
-                "[RECOMMENDATION] Run with the project venv Python: /project/.venv/bin/python main.py",
+                f"[INFO] Project venv Python: {venv_python}",
+                f"[RECOMMENDATION] Run with the project venv Python: {venv_python} main.py",
                 "[RECOMMENDATION] Or activate the venv before running commands: source .venv/bin/activate",
             ],
         )
@@ -740,15 +730,15 @@ class CliTests(unittest.TestCase):
                 "",
                 export_onenote.section_heading("Detected notebook storage site (for checking only)"),
                 "This is the Teams/SharePoint site that stores the notebook file. You usually do not need to open it.",
-                export_onenote.ascii_box(["https://school.sharepoint.com/teams/2026-GDD-542"]),
+                export_onenote.info_box(["https://school.sharepoint.com/teams/2026-GDD-542"]),
                 "",
                 export_onenote.section_heading("Step 1 (SITE_GUID): open this in your signed-in browser"),
                 "",
-                export_onenote.ascii_box(["https://school.sharepoint.com/teams/2026-GDD-542/_api/site/id"]),
+                export_onenote.info_box(["https://school.sharepoint.com/teams/2026-GDD-542/_api/site/id"]),
                 "",
                 export_onenote.section_heading("Step 2 (WEB_GUID): open this in your signed-in browser"),
                 "",
-                export_onenote.ascii_box(["https://school.sharepoint.com/teams/2026-GDD-542/_api/web/id"]),
+                export_onenote.info_box(["https://school.sharepoint.com/teams/2026-GDD-542/_api/web/id"]),
                 "",
                 export_onenote.section_heading("Step 3: copy the two GUID values, then run"),
                 "",
@@ -804,11 +794,11 @@ class CliTests(unittest.TestCase):
             "/sites/school.sharepoint.com,80a26a44-cf5b-42b2-bf61-c3a021fa18c7,5dbbcfdd-641d-42ed-b89a-2cb2451897ef"
         )
         self.assertIn(
-            export_onenote.ascii_box(["https://school.sharepoint.com/teams/2026-GDD-542/_api/site/id"]),
+            export_onenote.info_box(["https://school.sharepoint.com/teams/2026-GDD-542/_api/site/id"]),
             [call.args[0] for call in print_mock.call_args_list],
         )
         self.assertIn(
-            export_onenote.ascii_box(["https://school.sharepoint.com/teams/2026-GDD-542/_api/web/id"]),
+            export_onenote.info_box(["https://school.sharepoint.com/teams/2026-GDD-542/_api/web/id"]),
             [call.args[0] for call in print_mock.call_args_list],
         )
         resolved_site_id = (
@@ -817,7 +807,7 @@ class CliTests(unittest.TestCase):
             "5dbbcfdd-641d-42ed-b89a-2cb2451897ef"
         )
         self.assertIn(
-            export_onenote.ascii_box([resolved_site_id]),
+            export_onenote.info_box([resolved_site_id]),
             [call.args[0] for call in print_mock.call_args_list],
         )
         self.assertIn(
@@ -1047,7 +1037,7 @@ class CliTests(unittest.TestCase):
             [call.args[0] for call in print_mock.call_args_list],
             [
                 export_onenote.section_heading("Available notebooks"),
-                export_onenote.ascii_box([notebook_line]),
+                export_onenote.info_box([notebook_line]),
                 "",
                 export_onenote.section_heading("To download one notebook"),
                 "",

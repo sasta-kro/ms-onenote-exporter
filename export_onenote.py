@@ -91,10 +91,6 @@ def info_box(lines: list[str]) -> str:
     return "\n".join(boxed_lines)
 
 
-def ascii_box(lines: list[str]) -> str:
-    return info_box(lines)
-
-
 def env_value(name: str, default: str | None = None) -> str | None:
     value = os.getenv(name)
     if value is None or not value.strip():
@@ -102,12 +98,8 @@ def env_value(name: str, default: str | None = None) -> str | None:
     return value.strip()
 
 
-def local_venv_python() -> Path:
-    return Path(__file__).resolve().parent / ".venv" / "bin" / "python"
-
-
 def log_missing_dependency(error: MissingDependencyError) -> None:
-    venv_python = local_venv_python()
+    venv_python = Path(__file__).resolve().parent / ".venv" / "bin" / "python"
     log_error(f"Missing dependency '{error.package}' in the active Python interpreter.")
     log_info(f"Active Python: {sys.executable}")
     log_info(f"Project venv Python: {venv_python}")
@@ -220,16 +212,10 @@ def shell_double_quote(value: str) -> str:
     return f'"{escaped}"'
 
 
-def site_url_next_flag(*, list_notebooks: bool, notebook: str | None) -> str:
+def site_url_next_flag(*, notebook: str | None) -> str:
     if notebook:
         return f"--notebook {shell_double_quote(notebook)}"
-    if list_notebooks:
-        return "--list"
     return "--list"
-
-
-def site_id_from_guids(helper: SharePointSiteIdHelperUrls, site_guid: str, web_guid: str) -> str:
-    return helper.site_id_template.replace("SITE_GUID", site_guid).replace("WEB_GUID", web_guid)
 
 
 def print_detected_sharepoint_site(helper: SharePointSiteIdHelperUrls, *, boxed: bool) -> None:
@@ -298,11 +284,10 @@ def prompt_for_site_id_from_site_url(
     site_url: str,
     *,
     input_stream: Any = sys.stdin,
-    list_notebooks: bool = False,
     notebook: str | None = None,
 ) -> str:
     helper = sharepoint_url_to_site_id_helper_urls(site_url)
-    next_flag = site_url_next_flag(list_notebooks=list_notebooks, notebook=notebook)
+    next_flag = site_url_next_flag(notebook=notebook)
 
     print_detected_sharepoint_site(helper, boxed=False)
     print_guid_helper_link(1, "SITE_GUID", helper.site_id_url)
@@ -311,7 +296,7 @@ def prompt_for_site_id_from_site_url(
     web_guid = read_pasted_guid("WEB_GUID", input_stream)
     validate_distinct_sharepoint_guids(site_guid, web_guid)
 
-    site_id = site_id_from_guids(helper, site_guid, web_guid)
+    site_id = helper.site_id_template.replace("SITE_GUID", site_guid).replace("WEB_GUID", web_guid)
     print("")
     print(section_heading("Resolved site ID"))
     print(info_box([site_id]))
@@ -323,9 +308,9 @@ def prompt_for_site_id_from_site_url(
     return site_id
 
 
-def print_site_id_helper(site_url: str, *, list_notebooks: bool = False, notebook: str | None = None) -> None:
+def print_site_id_helper(site_url: str, *, notebook: str | None = None) -> None:
     helper = sharepoint_url_to_site_id_helper_urls(site_url)
-    next_flag = site_url_next_flag(list_notebooks=list_notebooks, notebook=notebook)
+    next_flag = site_url_next_flag(notebook=notebook)
 
     print_detected_sharepoint_site(helper, boxed=True)
     print_guid_helper_link(1, "SITE_GUID", helper.site_id_url)
@@ -441,12 +426,6 @@ def normalize_location(location: str) -> str:
     return location
 
 
-def graph_url(url: str) -> str:
-    if url.startswith("http://") or url.startswith("https://"):
-        return url
-    return f"{GRAPH_ROOT}{url}"
-
-
 @dataclass
 class GraphClient:
     token: str
@@ -468,7 +447,10 @@ class GraphClient:
 
         request_headers = dict(headers or {})
         request_headers["Authorization"] = f"Bearer {self.token}"
-        request_url = graph_url(url)
+        if url.startswith("http://") or url.startswith("https://"):
+            request_url = url
+        else:
+            request_url = f"{GRAPH_ROOT}{url}"
 
         for attempt in range(4):
             response = requests.request(
@@ -712,10 +694,6 @@ def clean_onenote_html_for_text(html: str, *, omit_images: bool = True) -> str:
     return cleaner.cleaned_html()
 
 
-def output_path_for_format(output_base: Path, extension: str) -> Path:
-    return Path(f"{output_base}.{extension.lstrip('.')}")
-
-
 def clean_converted_text(text: str) -> str:
     lines: list[str] = []
     for raw_line in text.replace("\ufffc", "").splitlines():
@@ -752,7 +730,7 @@ def convert_with_pandoc(
     source_path = html_path
     cleaned_path: Path | None = None
     if any(fmt in {"md", "txt", "rtf"} for fmt in formats):
-        cleaned_path = output_path_for_format(output_base, "cleaned.html")
+        cleaned_path = Path(f"{output_base}.cleaned.html")
         cleaned_html = clean_onenote_html_for_text(
             html_path.read_text(encoding="utf-8"),
             omit_images=omit_images,
@@ -762,7 +740,7 @@ def convert_with_pandoc(
 
     try:
         for fmt in formats:
-            out_path = output_path_for_format(output_base, fmt)
+            out_path = Path(f"{output_base}.{fmt}")
             result = subprocess.run(
                 [pandoc, str(source_path), "-f", "html", "-t", PANDOC_TARGETS[fmt], "-o", str(out_path)],
                 stdout=subprocess.PIPE,
@@ -804,7 +782,7 @@ def export_page(
     page_id = page["id"]
     short_id = re.sub(r"\W+", "", page_id)[-10:] or "page"
     output_base = output_dir / f"{safe_name(title)}-{short_id}"
-    html_path = output_path_for_format(output_base, "html")
+    html_path = Path(f"{output_base}.html")
 
     url, params = page_content_url(location, page)
     html_path.write_bytes(client.bytes(url, params=params))
@@ -992,11 +970,10 @@ def resolve_site_url_if_needed(args: argparse.Namespace, raw_argv: list[str], in
         args.site_id = prompt_for_site_id_from_site_url(
             args.site_url,
             input_stream=input_stream,
-            list_notebooks=args.list,
             notebook=args.notebook,
         )
         return auto_export_single_notebook
-    print_site_id_helper(args.site_url, list_notebooks=args.list, notebook=args.notebook)
+    print_site_id_helper(args.site_url, notebook=args.notebook)
     return None
 
 
@@ -1037,23 +1014,6 @@ def run_auto_export_single_notebook_flow(
         print("")
         log_info("More than one notebook was found, so nothing was auto-downloaded.")
         log_recommendation("Copy one of the notebook download commands above.")
-
-
-def run_export_flow(
-    *,
-    args: argparse.Namespace,
-    client: GraphClient,
-    context: ExportContext,
-    formats: list[str],
-) -> None:
-    export_notebooks(
-        client,
-        location=context.location,
-        output_dir=Path(args.out).expanduser().resolve(),
-        notebook_filter=args.notebook,
-        formats=formats,
-        include_image_links=args.include_image_links,
-    )
 
 
 def main(
@@ -1110,7 +1070,14 @@ def main(
             )
             return 0
 
-        run_export_flow(args=args, client=client, context=context, formats=formats)
+        export_notebooks(
+            client,
+            location=context.location,
+            output_dir=Path(args.out).expanduser().resolve(),
+            notebook_filter=args.notebook,
+            formats=formats,
+            include_image_links=args.include_image_links,
+        )
         return 0
     except MissingDependencyError as exc:
         log_missing_dependency(exc)
