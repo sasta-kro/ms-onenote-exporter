@@ -65,6 +65,12 @@ class CliHeadingTests(unittest.TestCase):
             ),
         )
 
+    def test_info_box_is_the_preferred_name_for_rounded_info_boxes(self) -> None:
+        self.assertEqual(
+            export_onenote.info_box(["Ready"]),
+            export_onenote.ascii_box(["Ready"]),
+        )
+
     def test_read_pasted_guid_boxes_enter_twice_instruction(self) -> None:
         stdin = io.StringIO(
             '<d:Id m:type="Edm.Guid">80a26a44-cf5b-42b2-bf61-c3a021fa18c7</d:Id>\n\n'

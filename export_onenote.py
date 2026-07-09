@@ -80,7 +80,7 @@ def copy_block(value: str) -> str:
     return "\n".join(f"{COPY_BLOCK_INDENT}{line}" for line in value.splitlines() or [""])
 
 
-def ascii_box(lines: list[str]) -> str:
+def info_box(lines: list[str]) -> str:
     content = [str(line) for line in lines] or [""]
     width = max(len(line) for line in content)
     top = f"{INFO_BOX_TOP_LEFT}{INFO_BOX_HORIZONTAL * (width + 2)}{INFO_BOX_TOP_RIGHT}"
@@ -89,6 +89,10 @@ def ascii_box(lines: list[str]) -> str:
     boxed_lines.extend(f"{INFO_BOX_VERTICAL} {line.ljust(width)} {INFO_BOX_VERTICAL}" for line in content)
     boxed_lines.append(bottom)
     return "\n".join(boxed_lines)
+
+
+def ascii_box(lines: list[str]) -> str:
+    return info_box(lines)
 
 
 def env_value(name: str, default: str | None = None) -> str | None:
@@ -233,7 +237,7 @@ def print_detected_sharepoint_site(helper: SharePointSiteIdHelperUrls, *, boxed:
     print(section_heading("Detected notebook storage site (for checking only)"))
     print("This is the Teams/SharePoint site that stores the notebook file. You usually do not need to open it.")
     if boxed:
-        print(ascii_box([helper.site_root]))
+        print(info_box([helper.site_root]))
     else:
         print(helper.site_root)
 
@@ -242,7 +246,7 @@ def print_guid_helper_link(step: int, label: str, url: str) -> None:
     print("")
     print(section_heading(f"Step {step} ({label}): open this in your signed-in browser"))
     print("")
-    print(ascii_box([url]))
+    print(info_box([url]))
 
 
 def extract_sharepoint_guid(pasted_text: str, label: str) -> str:
@@ -268,7 +272,7 @@ def read_pasted_guid(label: str, input_stream: Any = sys.stdin) -> str:
     print("")
     print(section_heading(f"Paste {label} page text"))
     print(
-        ascii_box(
+        info_box(
             [
                 "After pasting the XML text, press ENTER twice to continue.",
             ]
@@ -310,7 +314,7 @@ def prompt_for_site_id_from_site_url(
     site_id = site_id_from_guids(helper, site_guid, web_guid)
     print("")
     print(section_heading("Resolved site ID"))
-    print(ascii_box([site_id]))
+    print(info_box([site_id]))
     print("")
     print(section_heading("Reusable command to see Notebooks in the link"))
     print("")
@@ -969,7 +973,7 @@ def print_notebooks(client: GraphClient, location: str, export_command_base: str
         name = notebook.get("displayName") or "Untitled notebook"
         notebook_lines.append(f"{index}. {name}")
     print(section_heading("Available notebooks"))
-    print(ascii_box(notebook_lines))
+    print(info_box(notebook_lines))
     if export_command_base:
         first_name = notebooks[0].get("displayName") or "Untitled notebook"
         print("")
@@ -1019,7 +1023,7 @@ def run_auto_export_single_notebook_flow(
         notebook_name = notebooks[0].get("displayName") or "Untitled notebook"
         print("")
         print(section_heading("Auto-downloading the only notebook"))
-        print(ascii_box([notebook_name]))
+        print(info_box([notebook_name]))
         export_notebooks(
             client,
             location=context.location,
