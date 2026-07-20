@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import io
+import json
 import os
 import tempfile
 import unittest
@@ -488,6 +489,64 @@ class ExportNotebookTests(unittest.TestCase):
             self.assertTrue((notebook_dir / "Week 1" / "Intro-1234567890.html").exists())
             self.assertTrue(manifest_path.exists())
             self.assertFalse((output_dir / "manifest.json").exists())
+
+    def test_export_notebooks_skips_missing_graph_pages_and_continues(self) -> None:
+        client = Mock()
+        client.list_notebooks.return_value = [
+            {
+                "displayName": "Course Notes",
+                "sectionsUrl": "sections-url",
+            }
+        ]
+        client.paginate.return_value = [
+            {
+                "displayName": "Week 1",
+                "pagesUrl": "pages-url",
+            }
+        ]
+        client.list_pages.return_value = [
+            {
+                "id": "page-missing-1234567890",
+                "title": "Missing Page",
+                "lastModifiedDateTime": "2026-07-06T00:00:00Z",
+            },
+            {
+                "id": "page-good-0987654321",
+                "title": "Good Page",
+                "lastModifiedDateTime": "2026-07-06T00:00:00Z",
+            },
+        ]
+        client.bytes.side_effect = [
+            export_onenote.GraphError(
+                'Microsoft Graph error 404 for https://graph.microsoft.com/v1.0/sites/site/onenote/pages/page/content\n'
+                '{"error":{"code":"20102","message":"The specified resource ID does not exist."}}'
+            ),
+            b"<html><body>Good</body></html>",
+        ]
+
+        with tempfile.TemporaryDirectory() as tmpdir, patch("builtins.print") as print_mock:
+            output_dir = Path(tmpdir) / "out"
+
+            count = export_onenote.export_notebooks(
+                client,
+                location="/sites/site",
+                output_dir=output_dir,
+                notebook_filter="Course",
+                formats=[],
+            )
+
+            notebook_dir = output_dir / "Course Notes"
+            manifest = json.loads((notebook_dir / "manifest.json").read_text(encoding="utf-8"))
+            missing_page_exists = (notebook_dir / "Week 1" / "Missing Page-1234567890.html").exists()
+            good_page_exists = (notebook_dir / "Week 1" / "Good Page-0987654321.html").exists()
+
+        self.assertEqual(count, 1)
+        self.assertFalse(missing_page_exists)
+        self.assertTrue(good_page_exists)
+        self.assertEqual([record["title"] for record in manifest], ["Good Page"])
+        printed = "\n".join(str(call.args[0]) for call in print_mock.call_args_list)
+        self.assertIn("Skipped page because Microsoft Graph says it no longer exists", printed)
+        self.assertIn("Skipped 1 page(s).", printed)
 
     def test_export_notebooks_shows_available_names_when_filter_matches_nothing(self) -> None:
         client = Mock()

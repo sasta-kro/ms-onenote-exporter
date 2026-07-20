@@ -197,6 +197,7 @@ class NotebookOutput:
     folder: Path
     manifest: Path
     page_count: int
+    skipped_count: int = 0
 
 
 def sharepoint_url_to_site_id_helper_urls(url: str) -> SharePointSiteIdHelperUrls:
@@ -760,6 +761,18 @@ def clean_converted_text(text: str) -> str:
     return cleaned.rstrip() + "\n"
 
 
+def is_graph_missing_resource(error: GraphError) -> bool:
+    message = str(error)
+    return (
+        "Microsoft Graph error 404" in message
+        and (
+            '"code":"20102"' in message
+            or '"code": "20102"' in message
+            or "The specified resource ID does not exist" in message
+        )
+    )
+
+
 class ReadableTextExtractor(HTMLParser):
     BLOCK_TAGS = OneNoteHtmlCleaner.BLOCK_TAGS
 
@@ -1009,6 +1022,7 @@ def export_one_notebook(
     notebook_dir.mkdir(parents=True, exist_ok=True)
     notebook_manifest: list[dict[str, str]] = []
     page_count = 0
+    skipped_count = 0
 
     for section_path, section in iter_sections(client, notebook):
         section_dir = notebook_dir / safe_name(section_path)
@@ -1017,15 +1031,31 @@ def export_one_notebook(
         print(f"  Section: {section_path} ({len(pages)} pages)")
 
         for page in pages:
-            print(f"    Exporting: {page.get('title') or 'Untitled page'}")
-            record = export_page(
-                client,
-                location=location,
-                page=page,
-                output_dir=section_dir,
-                formats=formats,
-                include_image_links=include_image_links,
-            )
+            page_title = page.get("title") or "Untitled page"
+            print(f"    Exporting: {page_title}")
+            try:
+                record = export_page(
+                    client,
+                    location=location,
+                    page=page,
+                    output_dir=section_dir,
+                    formats=formats,
+                    include_image_links=include_image_links,
+                )
+            except GraphError as exc:
+                if not is_graph_missing_resource(exc):
+                    raise
+                skipped_count += 1
+                print(
+                    error_box(
+                        [
+                            f"[ERROR] Skipped page because Microsoft Graph says it no longer exists: {page_title}",
+                            "[INFO] This can happen when OneNote returns a stale or deleted page reference.",
+                            "[RECOMMENDATION] Open that page in Teams/OneNote, then retry later or export that page manually.",
+                        ]
+                    )
+                )
+                continue
             record["notebook"] = notebook_name
             record["section"] = section_path
             notebook_manifest.append(record)
@@ -1037,12 +1067,17 @@ def export_one_notebook(
         folder=notebook_dir,
         manifest=manifest_path,
         page_count=page_count,
+        skipped_count=skipped_count,
     )
 
 
 def print_export_summary(total_pages: int, output_dir: Path, notebook_outputs: list[NotebookOutput]) -> None:
     print("")
-    print(info_box([f"Successfully Exported {total_pages} page(s)."]))
+    skipped_pages = sum(notebook_output.skipped_count for notebook_output in notebook_outputs)
+    summary_lines = [f"Successfully Exported {total_pages} page(s)."]
+    if skipped_pages:
+        summary_lines.append(f"Skipped {skipped_pages} page(s).")
+    print(info_box(summary_lines))
     print(f"Output root: {output_dir}")
     for notebook_output in notebook_outputs:
         print(f"Notebook output: {notebook_output.name}")
