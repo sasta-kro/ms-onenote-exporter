@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import export_onenote
+import requests
 
 
 class FakeInteractiveStdin(io.StringIO):
@@ -143,6 +144,23 @@ class PaginationTests(unittest.TestCase):
                 ("https://example.test/next", None),
             ],
         )
+
+
+class GraphClientTests(unittest.TestCase):
+    def test_request_reports_timeout_without_raw_requests_error(self) -> None:
+        client = export_onenote.GraphClient(token="token")
+
+        with patch(
+            "requests.request",
+            side_effect=requests.exceptions.ReadTimeout("timed out"),
+        ):
+            with self.assertRaisesRegex(
+                export_onenote.GraphError,
+                "Microsoft Graph did not respond before the connection timed out",
+            ) as context:
+                client.request("GET", "/me/onenote/notebooks")
+
+        self.assertIn("run the same command again", str(context.exception))
 
 
 class SharePointUrlTests(unittest.TestCase):

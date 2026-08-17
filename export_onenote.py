@@ -504,13 +504,19 @@ class GraphClient:
             request_url = f"{GRAPH_ROOT}{url}"
 
         for attempt in range(4):
-            response = requests.request(
-                method,
-                request_url,
-                headers=request_headers,
-                params=params,
-                timeout=60,
-            )
+            try:
+                response = requests.request(
+                    method,
+                    request_url,
+                    headers=request_headers,
+                    params=params,
+                    timeout=60,
+                )
+            except requests.exceptions.Timeout as exc:
+                raise GraphError(
+                    "[ERROR] Microsoft Graph did not respond before the connection timed out.\n"
+                    "[RECOMMENDATION] Check the internet connection, then run the same command again."
+                ) from exc
             if response.status_code == 429:
                 wait = int(response.headers.get("Retry-After", "10"))
                 print(f"Microsoft Graph throttled this request. Waiting {wait}s...")
